@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import type { AppSettings, DockPosition } from '../../src/types'
+import { SessionManager } from '../services/sessionManager'
 
 // 默认设置
 const defaultSettings: AppSettings = {
@@ -11,6 +12,14 @@ const defaultSettings: AppSettings = {
 }
 
 let currentSettings: AppSettings = { ...defaultSettings }
+let sessionManager: SessionManager | null = null
+
+/**
+ * 绑定会话管理器（由 main.ts 调用）
+ */
+export function setSessionManager(manager: SessionManager): void {
+  sessionManager = manager
+}
 
 /**
  * 注册 IPC 处理器
@@ -81,6 +90,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (notchWindow && process.platform === 'win32') {
       notchWindow.setIgnoreMouseEvents(ignore, { forward: true })
     }
+  })
+
+  // 会话管理（自动发现模式，不再手动创建/销毁）
+  ipcMain.handle('session:create', () => {
+    throw new Error('Manual session creation is disabled. Sessions are auto-discovered from Claude Code logs.')
+  })
+
+  ipcMain.on('session:kill', () => {
+    // 自动发现模式下不支持手动 kill
   })
 }
 

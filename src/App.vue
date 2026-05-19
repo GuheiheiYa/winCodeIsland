@@ -6,7 +6,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useNotchStore } from './stores/notchStore'
 import { onSessionsUpdate, onExpandChanged } from './composables/useElectron'
-import { startMockUpdates, generateInitialSessions } from './services/mockSessionService'
+import { startMockUpdates } from './services/mockSessionService'
 import type { Session } from './types'
 import CollapsedBar from './components/CollapsedBar.vue'
 import ExpandedPanel from './components/ExpandedPanel.vue'
@@ -46,11 +46,7 @@ function handleClickOutside(event: MouseEvent): void {
  * 初始化：加载静态数据 + 监听 IPC 事件和模拟数据
  */
 function initializeApp(): void {
-  // ========== 0. 立即加载静态数据（确保页面一打开就有内容）==========
-  const initialSessions = generateInitialSessions()
-  store.updateSessions(initialSessions)
-
-  // ========== 1. 监听主进程发来的会话更新（会覆盖上面的初始数据）==========
+  // ========== 1. 监听主进程发来的会话更新（node-pty 真实数据）==========
   unsubSessions = onSessionsUpdate((sessions: Session[]) => {
     store.updateSessions(sessions)
   })
@@ -59,9 +55,6 @@ function initializeApp(): void {
   unsubExpand = onExpandChanged((expanded: boolean) => {
     store.setExpanded(expanded)
   })
-
-  // ========== 2.5 启动吉祥物状态轮训（CollapsedBar + TopBar 共享）==========
-  store.startMascotCycle()
 
   // ========== 3. 如果在浏览器环境（开发），启动定时更新（thinking 光标闪烁等）==========
   if (!window.electronAPI) {
@@ -112,7 +105,6 @@ onUnmounted(() => {
   unsubSessions?.()
   unsubExpand?.()
   cleanupMock?.()
-  store.stopMascotCycle()
   document.removeEventListener('mousedown', handleClickOutside)
   cleanupMouseIgnore?.()
 })

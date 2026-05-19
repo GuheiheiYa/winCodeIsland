@@ -91,7 +91,7 @@ function getRelativeTime(timestamp: number): string {
 export function createSession(partial: Partial<Session> = {}): Session {
   const projectName = partial.projectName || projectNames[Math.floor(Math.random() * projectNames.length)]
   const agentType = partial.agentType || 'claude'
-  const status = partial.status || (['working', 'sleeping', 'thinking'] as const)[Math.floor(Math.random() * 3)]
+  const status = partial.status || (['thinking', 'tool_use', 'responding', 'working', 'sleeping'] as const)[Math.floor(Math.random() * 5)]
   const terminalType = partial.terminalType || (['ghostty', 'iterm2'] as const)[Math.floor(Math.random() * 2)]
 
   // 获取逼真的终端输出
@@ -244,6 +244,35 @@ export function generateInitialSessions(): Session[] {
       ],
       timestamp: Date.now() - 30000,
       relativeTime: '30s'
+    },
+    // tool_use 状态
+    {
+      id: 'session-9',
+      projectName: 'cli-tools',
+      sessionNumber: undefined,
+      agentType: 'claude',
+      terminalType: 'ghostty',
+      status: 'tool_use',
+      lastOutput: [
+        { type: 'command', content: '[Tool] ReadFile' },
+        { type: 'output', content: '> Reading package.json...' }
+      ],
+      timestamp: Date.now() - 45000,
+      relativeTime: '45s'
+    },
+    // responding 状态
+    {
+      id: 'session-10',
+      projectName: 'ai-agent',
+      sessionNumber: undefined,
+      agentType: 'claude',
+      terminalType: 'iterm2',
+      status: 'responding',
+      lastOutput: [
+        { type: 'output', content: '> 我已经完成了代码重构，主要改动包括...' }
+      ],
+      timestamp: Date.now() - 90000,
+      relativeTime: '1m'
     }
   ]
 }

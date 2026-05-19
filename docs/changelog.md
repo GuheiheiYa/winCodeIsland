@@ -1,5 +1,60 @@
 # 更新文档
 
+## [v1.0.4] - 2026-05-19
+
+### 变更
+
+- **活跃状态展示统一简化** - 所有非 sleeping 状态不再提取 text/thinking/工具参数，统一返回空数组由 TerminalOutput 展示状态提示文字（`working...` / `thinking...` / `using tool...` / `waiting...`），绿色脉冲动画
+  - 移除 Markdown 渲染（`marked` 库不再使用）
+  - `TerminalOutput` 高度从 120px 缩至 **24px**（仅展示 1 行）
+  - `max-height` 由内容滚动改为 `overflow: hidden`
+- **`mascotStatus` 改为计算属性** - 从 3 秒轮训切换改为基于实际会话状态实时计算：全部 sleeping → `idle`，有 waitingApproval → `waitingApproval`，其他活跃 → `processing`
+  - 移除 `startMascotCycle()` / `stopMascotCycle()` 轮训逻辑
+  - `CollapsedBar` 与 `TopBar` 吉祥物状态与实际会话完全同步
+- **嵌套 tool_use 识别修复** - Claude Code API 的 `tool_use` 嵌套在 `assistant`/`message` 的 `content` 数组中，`findLastEventOfType` 同时检查顶层 type 和嵌套 content，确保 waitingApproval / working 状态正确识别工具调用
+- **展开面板高度调整** - 从 340px 增至 **370px**
+- **状态扩展为 6 状态** - 新增 `waitingApproval`（`state.status === 'waiting'` 时映射）
+
+### 修复
+
+- 修复 `tool_use` 嵌套在 `assistant` content 中导致 `findLastEventOfType` 返回 null 的问题
+- 修复 `waitingApproval` 状态错误展示旧 text 内容而非等待确认命令的问题
+- 修复 `mascotStatus` 轮训与实际会话状态不同步导致的动画错乱
+
+## [v1.0.3] - 2026-05-19
+
+### 新增
+
+- **扩展 SessionStatus 状态系统** - 从 3 状态扩展为 5 状态，更精确反映 Claude Code 行为
+  - `thinking` —— Claude 正在思考（assistant/message 包含 thinking 内容）
+  - `tool_use` —— Claude 正在执行工具（最后事件为 `tool_use`）
+  - `responding` —— Claude 正在生成回复（assistant/message 无 thinking）
+  - `working` —— 用户刚输入或其他 busy fallback（最后事件为 `user`）
+  - `sleeping` —— Claude 空闲（`idle`）
+  - 状态判断改为"最后事件类型优先"策略，更准确
+  - `responding` 状态终端标签显示为蓝色（`#60a5fa`），与 `tool_use`/`working` 的绿色区分
+- **Markdown 渲染支持** - `TerminalOutput` 组件支持 Markdown 渲染
+  - 安装 `marked` 库（v18.0.4）用于 Markdown 解析
+  - `output` 类型行自动检测 Markdown 语法（标题、列表、代码块、表格、粗体、斜体、链接、引用等）
+  - 匹配时通过 `marked.parse()` 渲染为 HTML，使用 `v-html` 注入
+  - 新增暗色主题 Markdown 样式（`:deep()` 穿透 scoped CSS）
+  - 非 Markdown 输出保持原有纯文本样式不变
+  - `thinking` / `command` / `prompt` / `link` 类型保持原有渲染逻辑
+
+## [v1.0.2] - 2026-05-19
+
+### 变更
+
+- **真实 Claude 会话监控** - 放弃 node-pty 方案，改为读取 Claude Code 本地日志文件
+  - 扫描 `~/.claude/sessions/*.json` 获取活跃会话状态（busy / idle）
+  - 读取 `~/.claude/projects/<hash>/<sessionId>.jsonl` 获取实时输出和 thinking 状态
+  - 状态映射：busy + 最近 thinking → `thinking`，busy + 其他 → `working`，idle → `sleeping`
+  - 支持嵌套 thinking 检测（assistant message content 数组中的 thinking 块）
+  - 自动提取用户输入（prompt）、AI 输出（output）、工具调用（command）
+- **列表展示优化** - 会话按 `thinking → working → sleeping` 排序；空闲会话只显示最后一行输出
+- **移除模拟数据** - 完全移除 `generateInitialSessions` 和 `startMockDataService`
+- **移除 node-pty** - 删除 `PtySession` 类和相关 IPC handler
+
 ## [v1.0.1] - 2026-05-19
 
 ### 变更

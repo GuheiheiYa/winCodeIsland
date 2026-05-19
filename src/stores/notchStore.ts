@@ -21,33 +21,13 @@ export const useNotchStore = defineStore('notch', () => {
   })
   const isSettingsOpen = ref(false)
 
-  /** 吉祥物状态（全局轮训，供 CollapsedBar 和 TopBar 共享） */
-  const mascotStatus = ref<'idle' | 'processing' | 'waitingApproval'>('idle')
-  let mascotTimer: ReturnType<typeof setInterval> | null = null
-  const STATUS_CYCLE: Array<'idle' | 'processing' | 'waitingApproval'> = [
-    'idle',
-    'processing',
-    'waitingApproval',
-  ]
-
-  /** 启动吉祥物状态轮训（应用级，只应调用一次） */
-  function startMascotCycle(): void {
-    if (mascotTimer) return
-    let idx = 0
-    mascotStatus.value = STATUS_CYCLE[0]
-    mascotTimer = setInterval(() => {
-      idx = (idx + 1) % STATUS_CYCLE.length
-      mascotStatus.value = STATUS_CYCLE[idx]
-    }, 3000)
-  }
-
-  /** 停止吉祥物状态轮训 */
-  function stopMascotCycle(): void {
-    if (mascotTimer) {
-      clearInterval(mascotTimer)
-      mascotTimer = null
-    }
-  }
+  // 吉祥物状态（基于实际会话状态，供 CollapsedBar 使用）
+  const mascotStatus = computed<'idle' | 'processing' | 'waitingApproval'>(() => {
+    const activeSessions = sessions.value.filter((s) => s.status !== 'sleeping')
+    if (activeSessions.length === 0) return 'idle'
+    if (activeSessions.some((s) => s.status === 'waitingApproval')) return 'waitingApproval'
+    return 'processing'
+  })
 
   // ==================== Getters ====================
 
@@ -56,7 +36,7 @@ export const useNotchStore = defineStore('notch', () => {
 
   /** 工作中会话数 */
   const workingCount = computed(
-    () => sessions.value.filter((s) => s.status === 'working' || s.status === 'thinking').length
+    () => sessions.value.filter((s) => s.status !== 'sleeping').length
   )
 
   /** 按助手类型分组 */
@@ -82,7 +62,19 @@ export const useNotchStore = defineStore('notch', () => {
       groups[session.agentType].sessions.push(session)
     }
 
-    // 按固定顺序返回
+    // 按固定顺序返回，每组内部按状态排序：waitingApproval > thinking > tool_use > responding > working > sleeping
+    const statusOrder: Record<SessionStatus, number> = {
+      waitingApproval: 0,
+      thinking: 1,
+      tool_use: 2,
+      responding: 3,
+      working: 4,
+      sleeping: 5,
+    }
+    for (const group of Object.values(groups)) {
+      group.sessions.sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
+    }
+
     const order: AgentType[] = ['claude', 'codex', 'gemini']
     return order
       .map((type) => groups[type])
@@ -94,13 +86,13 @@ export const useNotchStore = defineStore('notch', () => {
     if (activeTab.value === 'all') {
       return sessions.value
     }
-    // STA: 只显示 sleeping/thinking 状态的
+    // STA: 只显示 sleeping/thinking/waitingApproval 状态的（休息、思考和等待确认）
     if (activeTab.value === 'sta') {
-      return sessions.value.filter((s) => s.status === 'sleeping' || s.status === 'thinking')
+      return sessions.value.filter((s) => s.status === 'sleeping' || s.status === 'thinking' || s.status === 'waitingApproval')
     }
-    // CLI: 只显示 working 状态的
+    // CLI: 只显示 tool_use/responding/working 状态的（所有活跃工作）
     if (activeTab.value === 'cli') {
-      return sessions.value.filter((s) => s.status === 'working')
+      return sessions.value.filter((s) => s.status === 'tool_use' || s.status === 'responding' || s.status === 'working')
     }
     return sessions.value
   })
@@ -195,8 +187,6 @@ export const useNotchStore = defineStore('notch', () => {
     dockToEdge,
     openSettings,
     closeSettings,
-    updateSettings,
-    startMascotCycle,
-    stopMascotCycle
+    updateSettings
   }
 })

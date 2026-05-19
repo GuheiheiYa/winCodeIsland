@@ -42,7 +42,7 @@
 - Canvas 2D 绘制像素章鱼吉祥物（26x22 CSS 像素，devicePixelRatio 适配）
 - `CanvasRenderer` 引擎驱动三种动画场景：idle / processing / waitingApproval
 - 吉祥物状态由 Pinia store 全局管理（`notchStore.mascotStatus`），`CollapsedBar` 与 `TopBar` 共享同一状态
-- 应用启动时通过 `store.startMascotCycle()` 启动轮训（每 3 秒循环）
+- **`mascotStatus` 为计算属性**，基于实际会话状态实时映射：全部 sleeping → `idle`，有 waitingApproval → `waitingApproval`，有 working/thinking/tool_use/responding → `processing`
 - 状态文字 + 颜色 + 发光效果联动
 - 动态省略号动画（450ms 周期：'' → '.' → '..' → '...'）
 - 等宽字体营造科技像素风（Courier New / Consolas / Monaco）
@@ -62,7 +62,7 @@
 **职责**: 点击 Pill 小条后展开，展示完整的会话列表和详情。
 
 **关键实现**:
-- 尺寸 560px 宽，固定高度 340px（内容在面板内部滚动），带自定义滚动条
+- 尺寸 560px 宽，固定高度 **370px**（内容在面板内部滚动），带自定义滚动条
 - 底部圆角 24px，无边框顶部，micro-curve 弧线过渡
 - 按助手分组（Claude / Codex / Gemini）交错淡入动画
 - 空状态友好提示
@@ -92,8 +92,30 @@
 - 项目名称 + 会话编号
 - 时间标签（1h、<1m、1m）
 - 终端类型（Ghostty/iTerm2 + 彩色圆点）
-- 最近终端输出（带颜色区分）
-- 状态指示：sleeping（zzz图标）、thinking（光标闪烁）、working（绿色圆点）
+- 最近终端输出（sleeping 状态展示最后一行历史输出；活跃状态统一展示状态提示文字）
+- 状态指示：sleeping（zzz图标）、thinking（光标闪烁+绿色）、tool_use（绿色圆点）、responding（蓝色圆点）、working（绿色圆点）、waitingApproval（橙色感叹号）
+
+### 2.4.1 TerminalOutput - 终端输出渲染
+
+**文件**: `src/components/TerminalOutput.vue`
+
+**职责**: 渲染会话的最近终端输出。活跃状态统一展示简洁的状态提示，sleeping 状态展示最后一行历史输出。
+
+**渲染策略**:
+
+| 行类型 | 渲染方式 | 说明 |
+|--------|---------|------|
+| `command` | 纯文本 | `$ ` 前缀，灰色 |
+| `prompt` | 纯文本 | `$ ` 前缀，白色 |
+| `output` | 纯文本 | 绿色前缀 `> ` |
+| `thinking` | 纯文本 + 光标 | 灰色文字 + 闪烁光标 |
+| `link` | 链接 | 蓝色可点击链接 |
+
+**活跃状态展示**: 所有活跃状态（thinking / tool_use / responding / working / waitingApproval）统一返回空数组，由 TerminalOutput 展示对应的状态提示文字（`thinking...` / `using tool...` / `responding...` / `working...` / `waiting...`），带绿色脉冲动画。
+
+**sleeping 状态展示**: 展示 JSONL 日志中最后一行有意义的输出（user prompt / assistant text / tool_result 等）。
+
+**尺寸**: `max-height: 24px`，`overflow: hidden`，活跃状态严格只展示 1 行。
 
 ### 2.5 AgentGroup - 助手分组
 
@@ -175,7 +197,52 @@ animations.ts       (动画系统)
 - **光晕**: 0.5s 脉冲红色 radial gradient
 - **感叹号**: 缩放 + 透明度关键帧
 
-## 4. 数据模型
+## 4. 会话监控（Claude Code 日志读取）
+
+**实现**: `electron/services/claudeLogMonitor.ts` + `electron/services/sessionManager.ts`
+
+**数据来源**:
+- 状态文件: `~/.claude/sessions/<pid>.json` —— 包含 `sessionId`, `cwd`, `status` (busy/idle), `updatedAt`
+- 日志文件: `~/.claude/projects/<hash>/<sessionId>.jsonl` —— JSON Lines 格式，包含 user/assistant/thinking/tool_use 等事件
+
+**扫描逻辑**:
+1. 每 1.5 秒扫描 `sessions/` 目录，读取所有 `.json` 状态文件
+2. 过滤出 `kind === 'interactive' && entrypoint === 'cli'` 的会话
+3. 根据 `sessionId` 在 `projects/` 下查找对应的 `.jsonl` 日志文件
+4. 读取 JSONL 末尾 50 行，解析事件类型判断状态和提取输出
+
+**状态映射**（6 状态，基于最后事件类型）：
+
+| 原始状态 | 最后事件类型 | 条件 | 映射为 |
+|---------|-------------|------|--------|
+| `idle` | — | — | `sleeping` |
+| `waiting` | — | `waitingFor: "permission prompt"` | `waitingApproval` |
+| `busy` | `user` | 用户刚输入 | `working` |
+| `busy` | `tool_use` | 正在执行工具 | `tool_use` |
+| `busy` | `assistant`/`message` | 包含 thinking 内容 | `thinking` |
+| `busy` | `assistant`/`message` | 无 thinking 内容 | `responding` |
+| `busy` | 其他/无事件 | fallback | `working` |
+
+**嵌套 tool_use 支持**: Claude Code API 的 `tool_use` 事件嵌套在 `assistant`/`message` 类型的 `content` 数组中（`content[0].type === 'tool_use'`）。`findLastEventOfType` 同时检查顶层 `type` 和嵌套 content，确保正确识别工具调用。
+
+**输出提取**（统一简洁策略）：
+| 状态 | 提取内容 |
+|------|---------|
+| `thinking` | 返回空（TerminalOutput 展示 `thinking...`） |
+| `tool_use` | 返回空（TerminalOutput 展示 `using tool...`） |
+| `responding` | 返回空（TerminalOutput 展示 `responding...`） |
+| `working` | 返回空（TerminalOutput 展示 `working...`） |
+| `waitingApproval` | 返回空（TerminalOutput 展示 `waiting...`） |
+| `sleeping` | 最后一行有意义输出 |
+
+事件类型映射（sleeping 状态）：
+- `user` → `prompt` 类型（用户输入）
+- `assistant`/`message` → `output` 类型（AI 回复 text 块）
+- `thinking` → `thinking` 类型（思考内容）
+- `tool_use` → `command` 类型（工具调用）
+- `tool_result` → `output` 类型（工具返回结果）
+
+## 5. 数据模型
 
 ### 4.1 Session（会话）
 
@@ -186,7 +253,7 @@ interface Session {
   sessionNumber?: string   // 编号（如 #8387）
   agentType: 'claude' | 'codex' | 'gemini'
   terminalType: 'ghostty' | 'iterm2'
-  status: 'working' | 'sleeping' | 'thinking'
+  status: 'thinking' | 'tool_use' | 'responding' | 'working' | 'waitingApproval' | 'sleeping'
   lastOutput: OutputLine[] // 最近终端输出
   timestamp: number        // 时间戳
   relativeTime: string     // 相对时间文本
@@ -215,7 +282,7 @@ interface AppState {
 }
 ```
 
-## 5. IPC 通信
+## 6. IPC 通信
 
 **通道列表**:
 
@@ -231,7 +298,7 @@ interface AppState {
 | `settings:changed` | M → R | 设置变更通知 |
 | `app:quit` | R → M | 退出应用 |
 
-## 6. 窗口系统
+## 7. 窗口系统
 
 **文件**: `electron/windows/notchWindow.ts`
 
@@ -248,14 +315,14 @@ interface AppState {
 | 状态 | 宽度 | 高度 | 位置 |
 |------|------|------|------|
 | 收起 | 300px | 36px | 屏幕顶部居中 |
-| 展开 | 560px | 340px（固定高度，内容滚动） | 从收起位置向中心展开 |
+| 展开 | 560px | 370px（固定高度，内容滚动） | 从收起位置向中心展开 |
 
 ### 6.3 贴边吸附
 - 吸附阈值：40px
 - 支持四边：top / bottom / left / right
 - 拖拽结束时自动检测并吸附
 
-## 7. 样式系统
+## 8. 样式系统
 
 ### 7.1 CSS 变量
 

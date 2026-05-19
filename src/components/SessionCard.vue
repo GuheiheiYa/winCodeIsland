@@ -15,15 +15,28 @@ const props = defineProps<{
 /** 根据会话状态返回像素章鱼图标类型 */
 const statusIcon = computed(() => {
   switch (props.session.status) {
+    case 'thinking':
+    case 'waitingApproval':
+      return 'thinking'
+    case 'tool_use':
+    case 'responding':
     case 'working':
       return 'working'
     case 'sleeping':
       return 'sleeping'
-    case 'thinking':
-      return 'thinking'
     default:
       return 'sleeping'
   }
+})
+
+/** 是否为空闲会话 */
+const isIdle = computed(() => props.session.status === 'sleeping')
+
+/** 最后一行输出（空闲会话只展示这个） */
+const lastLine = computed(() => {
+  const lines = props.session.lastOutput
+  if (lines.length === 0) return null
+  return lines[lines.length - 1]
 })
 </script>
 
@@ -117,11 +130,19 @@ const statusIcon = computed(() => {
           <span class="project-name">{{ session.projectName }}</span>
           <span v-if="session.sessionNumber" class="session-number">{{ session.sessionNumber }}</span>
         </div>
-        <div class="divider-line" />
+        <div v-if="!isIdle" class="divider-line" />
       </div>
 
-      <!-- 终端输出 -->
-      <div class="terminal-output">
+      <!-- 终端输出：空闲会话只显示最后一行 -->
+      <div v-if="isIdle" class="idle-last-line">
+        <template v-if="lastLine">
+          <span v-if="lastLine.type === 'prompt'" class="idle-prefix">$</span>
+          <span v-else-if="lastLine.type === 'output'" class="idle-prefix idle-green">&gt;</span>
+          <span class="idle-content">{{ lastLine.content }}</span>
+        </template>
+        <span v-else class="idle-empty">暂无输出</span>
+      </div>
+      <div v-else class="terminal-output">
         <TerminalOutput :lines="session.lastOutput" :status="session.status" />
       </div>
     </div>
@@ -129,7 +150,7 @@ const statusIcon = computed(() => {
     <!-- 右列：时间 + 终端类型 -->
     <div class="card-right">
       <span class="time-badge">{{ session.relativeTime }}</span>
-      <div class="terminal-badge" :class="`status-${session.status}`">
+      <div v-if="!isIdle" class="terminal-badge" :class="`status-${session.status}`">
         <span class="terminal-name">{{ session.terminalType }}</span>
         <span class="terminal-arrow">→</span>
       </div>
@@ -142,7 +163,7 @@ const statusIcon = computed(() => {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 7px 14px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
@@ -250,11 +271,14 @@ const statusIcon = computed(() => {
   opacity: 0.85;
 }
 
-.status-working .pixel-icon {
+.status-working .pixel-icon,
+.status-tool_use .pixel-icon,
+.status-responding .pixel-icon,
+.status-thinking .pixel-icon {
   filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.25));
 }
 
-.status-thinking .pixel-icon {
+.status-waitingApproval .pixel-icon {
   filter: drop-shadow(0 0 3px rgba(255, 61, 0, 0.3));
 }
 
@@ -283,11 +307,14 @@ const statusIcon = computed(() => {
   color: var(--text-primary);
 }
 
-.status-working .project-name {
+.status-working .project-name,
+.status-tool_use .project-name,
+.status-responding .project-name,
+.status-thinking .project-name {
   color: var(--accent-green);
 }
 
-.status-thinking .project-name {
+.status-waitingApproval .project-name {
   color: var(--accent-orange);
 }
 
@@ -306,6 +333,37 @@ const statusIcon = computed(() => {
 /* 终端输出 */
 .terminal-output {
   margin-top: 4px;
+}
+
+/* ===== 空闲会话最后一行 ===== */
+.idle-last-line {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.idle-prefix {
+  margin-right: 4px;
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 500;
+}
+
+.idle-green {
+  color: #4ade80;
+}
+
+.idle-content {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.idle-empty {
+  color: rgba(255, 255, 255, 0.2);
+  font-style: italic;
 }
 
 /* ===== 右列：时间 + 终端类型 ===== */
@@ -346,13 +404,21 @@ const statusIcon = computed(() => {
 }
 
 /* 终端类型颜色按状态区分 */
-.terminal-badge.status-working {
+.terminal-badge.status-working,
+.terminal-badge.status-tool_use,
+.terminal-badge.status-thinking {
   color: #4ade80;
   background: rgba(74, 222, 128, 0.1);
   border: 1px solid rgba(74, 222, 128, 0.2);
 }
 
-.terminal-badge.status-thinking {
+.terminal-badge.status-responding {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.terminal-badge.status-waitingApproval {
   color: #fb923c;
   background: rgba(251, 146, 60, 0.1);
   border: 1px solid rgba(251, 146, 60, 0.2);

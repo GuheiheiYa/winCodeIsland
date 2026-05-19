@@ -20,7 +20,7 @@ export class NotchWindowManager {
   // 展开状态尺寸
   private readonly expandedWidth = 560
   private readonly expandedMaxHeightRatio = 0.8 // 最大占屏幕高度的 80%
-  private readonly expandedFixedHeight = 340 // 展开面板固定高度（内容可滚动）
+  private readonly expandedFixedHeight = 370 // 展开面板固定高度（内容可滚动）
 
   create(): BrowserWindow {
     const primaryDisplay = screen.getPrimaryDisplay()

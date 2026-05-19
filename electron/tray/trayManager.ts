@@ -61,9 +61,6 @@ export class TrayManager {
    * 创建默认图标（程序生成）
    */
   private createDefaultIcon(): nativeImage {
-    // 创建一个简单的彩色圆形图标
-    const size = 32
-    const canvas = document?.createElement?.('canvas')
     // 使用 Buffer 创建一个简单的 PNG 图标
     // 这是一个 16x16 的深色圆角方块 PNG
     const pngData = Buffer.from([

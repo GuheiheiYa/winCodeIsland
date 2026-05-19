@@ -2,8 +2,9 @@
 /**
  * TerminalOutput - 终端输出行组件
  * 显示带颜色的终端输出：$灰色, >绿色, 链接蓝色, thinking光标闪烁
- * 参考设计：img_1.png 中的终端输出区域
+ * 支持 Markdown 渲染（output 类型且内容包含 Markdown 语法时）
  */
+import { computed } from 'vue'
 import type { OutputLine, SessionStatus } from '../types'
 
 const props = defineProps<{
@@ -46,13 +47,33 @@ function getLinePrefix(line: OutputLine): string {
       return ''
   }
 }
+
+/**
+ * 根据状态返回默认提示文字
+ */
+const statusLabel = computed(() => {
+  switch (props.status) {
+    case 'thinking':
+      return 'thinking...'
+    case 'tool_use':
+      return 'using tool...'
+    case 'responding':
+      return 'responding...'
+    case 'working':
+      return 'working...'
+    case 'waitingApproval':
+      return 'waiting...'
+    default:
+      return ''
+  }
+})
 </script>
 
 <template>
   <div class="terminal-output">
-    <!-- 输出行列表（最多展示3行） -->
+    <!-- 输出行列表 -->
     <div
-      v-for="(line, index) in lines.slice(0, 3)"
+      v-for="(line, index) in lines"
       :key="index"
       class="output-line"
       :class="getLineClass(line)"
@@ -74,7 +95,7 @@ function getLinePrefix(line: OutputLine): string {
       </template>
       <template v-else-if="line.type === 'thinking'">
         <span class="line-content">
-          {{ line.content }}
+          <span class="thinking-text">{{ line.content }}</span>
           <span class="thinking-cursor" />
         </span>
       </template>
@@ -83,12 +104,9 @@ function getLinePrefix(line: OutputLine): string {
       </template>
     </div>
 
-    <!-- 如果会话是 thinking 状态且没有 thinking 输出行，显示默认 thinking -->
-    <div v-if="status === 'thinking' && !lines.some(l => l.type === 'thinking')" class="output-line line-thinking">
-      <span class="line-content">
-        thinking
-        <span class="thinking-cursor" />
-      </span>
+    <!-- 如果没有任何输出行，根据状态显示默认提示 -->
+    <div v-if="lines.length === 0" class="output-line line-default">
+      <span class="default-text">{{ statusLabel }}</span>
     </div>
   </div>
 </template>
@@ -100,7 +118,14 @@ function getLinePrefix(line: OutputLine): string {
   gap: 1px;
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.5;
+  max-height: 24px;
+  overflow: hidden;
+  padding-right: 2px;
+}
+
+.terminal-output::-webkit-scrollbar {
+  width: 3px;
 }
 
 /* ===== 输出行基础样式 ===== */
@@ -154,6 +179,14 @@ function getLinePrefix(line: OutputLine): string {
   color: rgba(255, 255, 255, 0.35);
 }
 
+.thinking-text {
+  display: block;
+  max-height: 3.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
 /* Thinking 光标 */
 .thinking-cursor {
   display: inline-block;
@@ -192,4 +225,22 @@ function getLinePrefix(line: OutputLine): string {
 .line-command .line-prefix {
   color: rgba(255, 255, 255, 0.3);
 }
+
+/* ===== 默认状态提示（无内容时） ===== */
+.line-default {
+  color: #4ade80;
+}
+
+.default-text {
+  font-size: 12px;
+  font-weight: 500;
+  animation: textPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes textPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Markdown rendering disabled in SessionCard context */
 </style>

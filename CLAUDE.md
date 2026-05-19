@@ -32,10 +32,10 @@ npm run typecheck
 
 应用 cleanly 地拆分在 Electron 的进程边界两侧：
 
-- **`electron/`** —— 主进程。负责原生窗口（`NotchWindowManager`）、系统托盘（`TrayManager`）和 IPC 处理器（`ipcHandlers.ts`）。主进程是窗口边界、贴边位置、会话数据的唯一真相源（最终通过 node-pty 接入；目前开发模式使用模拟数据）。
+- **`electron/`** —— 主进程。负责原生窗口（`NotchWindowManager`）、系统托盘（`TrayManager`）和 IPC 处理器（`ipcHandlers.ts`）。主进程是窗口边界、贴边位置、会话数据的唯一真相源（通过读取 Claude Code 本地日志文件 `~/.claude/sessions/*.json` 和 `~/.claude/projects/<hash>/<sessionId>.jsonl` 获取真实会话状态）。
 - **`src/`** —— 渲染进程。纯 Vue 前端。通过 `window.electronAPI`（由 `preload.ts` 暴露）读写状态。绝不直接使用 Node API。
 
-**数据流**：主进程通过 IPC `sessions:update` 推送会话更新 → Pinia store（`notchStore.ts`）→ Vue 组件响应式重渲染。渲染进程可以通过 IPC 通道向主进程请求窗口变更（展开、贴边等）。
+**数据流**：`ClaudeLogMonitor`（`electron/services/claudeLogMonitor.ts`）定时扫描 Claude Code 本地日志 → `SessionManager`（`electron/services/sessionManager.ts`）聚合为 `Session[]` → 通过 IPC `sessions:update` 推送到渲染进程 → Pinia store（`notchStore.ts`）→ Vue 组件响应式重渲染。渲染进程可以通过 IPC 通道向主进程请求窗口变更（展开、贴边等）。
 
 ### 两种 UI 模式
 
@@ -45,7 +45,7 @@ npm run typecheck
    - 左侧：由 `CanvasRenderer`（`src/renderer/canvas/canvas-renderer.ts`）驱动的 Canvas 2D 像素章鱼吉祥物。
    - 吉祥物有三种场景：`idle`（睡觉 + Zzz）、`processing`（弹跳 + 打字）、`waitingApproval`（跳跃 + 告警感叹号）。
    - 状态文字、颜色、发光效果由同一吉祥物状态派生。
-   - 当前代码使用轮询周期（每 3 秒 `setInterval`）循环切换三种吉祥物状态用于演示。
+   - `mascotStatus` 是计算属性，基于实际会话状态实时映射：全部 sleeping → `idle`，有 waitingApproval → `waitingApproval`，其他活跃 → `processing`。
 
 2. **ExpandedPanel**（`src/components/ExpandedPanel.vue`）—— 从收起小条展开的 560px 宽面板。
    - 使用 `AgentGroup` 和 `SessionCard` 按 `agentType` 分组显示会话（当前仅 Claude）。
@@ -68,12 +68,12 @@ npm run typecheck
 - `sessions` —— `Session` 对象数组，通过 IPC 从主进程更新。
 - `isExpanded` / `activeTab` / `dockPosition` —— UI 状态。
 - `groupedByAgent` —— 计算属性，按 `agentType` 以固定顺序（Claude → Codex → Gemini）分组会话，过滤空组。
-- `filteredSessions` —— 响应 `activeTab`：ALL = 全部，STA = sleeping/thinking，CLI = working。
+- `filteredSessions` —— 响应 `activeTab`：ALL = 全部，STA = sleeping/thinking，CLI = tool_use/responding/working。
 
 ### 会话数据模型
 
 ```typescript
-type SessionStatus = 'working' | 'sleeping' | 'thinking'
+type SessionStatus = 'thinking' | 'tool_use' | 'responding' | 'working' | 'waitingApproval' | 'sleeping'
 type AgentType = 'claude' | 'codex' | 'gemini'
 type TerminalType = 'ghostty' | 'iterm2'
 
@@ -98,7 +98,7 @@ interface Session {
 - 无边框、置顶、透明、跳过任务栏的窗口创建。
 - 通过渲染进程的 IPC 消息实现拖拽移动（`drag-start`、`drag-move`、`drag-end`）。
 - 拖拽结束时贴边吸附（40px 阈值）。
-- 收起（300x36）与展开（560x680，最大 85vh）状态间的边界动画。
+- 收起（300x36）与展开（560x370，固定高度内容滚动）状态间的边界动画。
 
 ### IPC 事件（摘要）
 
@@ -133,6 +133,9 @@ electron/          # 主进程代码
   windows/         # 窗口管理
   tray/            # 托盘管理
   ipc/             # IPC 处理器
+  services/        # 服务层
+    claudeLogMonitor.ts  # Claude Code 日志监控
+    sessionManager.ts    # 会话管理器（聚合日志数据并推送）
   preload.ts       # 预加载脚本
 
 src/               # 渲染进程代码
@@ -194,7 +197,8 @@ docs/              # 项目文档（必须维护）
 
 | 文档 | 最后更新 | 说明 |
 |------|---------|------|
-| `requirements.md` | v1.0.0 | FR-1 ~ FR-7 需求定义 |
-| `features.md` | v1.0.0 | 6 大模块功能总览、Canvas 引擎架构、数据模型 |
-| `changelog.md` | v1.0.0 | 2025-05-19 发布，含已知问题与路线图 |
+| `requirements.md` | v1.0.4 | FR-1 ~ FR-7 需求定义，含 6 状态 + 370px 展开高度 |
+| `features.md` | v1.0.4 | 6 状态会话监控、统一状态提示展示、嵌套 tool_use 修复 |
+| `changelog.md` | v1.0.4 | 2026-05-19 发布，v1.0.4 统一状态展示 + mascotStatus 计算属性 |
+| `claude-session-format.md` | v1.0.4 | Claude Code 日志格式规范（sessions.json + jsonl 事件类型） |
 | `expanded-panel-roadmap.md` | v1.0.0 | 展开面板功能拆解、待开发项、版本规划 |

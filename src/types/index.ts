@@ -10,7 +10,7 @@ export interface OutputLine {
 /**
  * 会话状态
  */
-export type SessionStatus = 'working' | 'sleeping' | 'thinking'
+export type SessionStatus = 'thinking' | 'tool_use' | 'responding' | 'working' | 'waitingApproval' | 'sleeping'
 
 /**
  * 助手类型
@@ -106,6 +106,8 @@ export interface ElectronAPI {
   setSettings: (settings: AppSettings) => void
   onExpandChanged: (callback: (expanded: boolean) => void) => () => void
   setIgnoreMouseEvents: (ignore: boolean) => void
+  createSession: (projectName: string, cwd: string) => Promise<string>
+  killSession: (id: string) => void
   platform: string
 }
 
