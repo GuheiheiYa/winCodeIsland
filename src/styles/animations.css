@@ -1,0 +1,262 @@
+/**
+ * CSS 动画定义
+ * 所有动画统一在此定义，使用 CSS keyframes 和 transitions
+ */
+
+/* ===== Thinking 光标闪烁 ===== */
+@keyframes cursorBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ===== 展开/收起宽度过渡 ===== */
+@keyframes expandWidth {
+  from {
+    width: 280px;
+    height: 50px;
+  }
+  to {
+    width: 420px;
+    height: 580px;
+  }
+}
+
+@keyframes collapseWidth {
+  from {
+    width: 420px;
+    height: 580px;
+  }
+  to {
+    width: 280px;
+    height: 50px;
+  }
+}
+
+/* ===== 淡入动画 ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 缩放淡入 ===== */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ===== 脉冲光晕 ===== */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(96, 165, 250, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(96, 165, 250, 0.6);
+  }
+}
+
+/* ===== 呼吸效果（sleeping） ===== */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ===== 下滑入 ===== */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 上滑入 ===== */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 弹跳效果 ===== */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* ===== 旋转 ===== */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== 闪烁点（加载中） ===== */
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ===== 终端光标 ===== */
+@keyframes terminalCursor {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ===== 抖动（错误提示） ===== */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+/* ===== 渐变背景流动 ===== */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ===== 悬浮效果 ===== */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ===== 统一动画类 ===== */
+
+/* 收起 → 展开过渡 */
+.notch-expand-enter-active,
+.notch-expand-leave-active {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.notch-expand-enter-from,
+.notch-expand-leave-to {
+  width: 280px !important;
+  height: 50px !important;
+  opacity: 0.8;
+}
+
+/* 面板内容淡入 */
+.panel-fade-enter-active {
+  transition: opacity 0.25s ease 0.1s;
+}
+.panel-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.panel-fade-enter-from,
+.panel-fade-leave-to {
+  opacity: 0;
+}
+
+/* 列表项交错动画 */
+.list-stagger-enter-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.list-stagger-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.list-stagger-leave-active {
+  transition: all 0.2s ease;
+  position: absolute;
+}
+.list-stagger-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+/* 模态框动画 */
+.modal-enter-active {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-leave-active {
+  transition: all 0.15s ease;
+}
+.modal-enter-from {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.modal-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+/* 设置面板滑入 */
+.settings-enter-active {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.settings-leave-active {
+  transition: all 0.2s ease;
+}
+.settings-enter-from {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+}
+.settings-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
