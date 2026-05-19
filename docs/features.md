@@ -197,7 +197,35 @@ animations.ts       (动画系统)
 - **光晕**: 0.5s 脉冲红色 radial gradient
 - **感叹号**: 缩放 + 透明度关键帧
 
-## 4. 会话监控（Claude Code 日志读取）
+## 4. 音效系统
+
+**实现**: `src/services/soundService.ts`
+
+**设计目标**: 为会话状态变化提供 8-bit 风格的声音反馈，让用户在不看屏幕时也能感知 AI 工作状态变化。
+
+**音效文件**（`public/resources/sounds/`）：
+
+| 文件名 | 触发场景 | 冷却时间 |
+|--------|---------|---------|
+| `8bit_boot.wav` | 应用启动 | 只播放一次 |
+| `8bit_start.wav` | 会话从 sleeping 变为 working/thinking/tool_use/responding | 2s |
+| `8bit_complete.wav` | 会话从活跃状态变为 sleeping | 2s |
+| `8bit_approval.wav` | 会话变为 waitingApproval | 3s |
+| `8bit_error.wav` | 预留 | 1s |
+| `8bit_submit.wav` | 预留 | 1s |
+
+**状态转换触发规则**：
+
+| 前状态 | 后状态 | 音效 |
+|--------|--------|------|
+| sleeping | working/thinking/tool_use/responding | `start` |
+| any | waitingApproval | `approval` |
+| working/thinking/tool_use/responding | sleeping | `complete` |
+| waitingApproval | sleeping | `complete` |
+
+**架构**: `SoundService` 为单例，在 `notchStore` 的 `updateSessions` 中通过对比 `previousSessions` 检测状态变化并调用。设置变更时通过 `soundService.setEnabled()` 同步开关状态。
+
+## 5. 会话监控（Claude Code 日志读取）
 
 **实现**: `electron/services/claudeLogMonitor.ts` + `electron/services/sessionManager.ts`
 

@@ -1,5 +1,17 @@
 # 更新文档
 
+## [v1.0.5] - 2026-05-19
+
+### 新增
+
+- **音效系统** - 8-bit 风格音效反馈，为会话状态变化提供声音提示
+  - 音效文件：`public/resources/sounds/` 下 6 个 WAV 文件（boot/start/complete/approval/error/submit）
+  - `SoundService`（`src/services/soundService.ts`）—— 预加载、冷却控制、开关管理
+  - 状态转换触发逻辑：sleeping → active 播放 `start`、→ waitingApproval 播放 `approval`、active → sleeping 播放 `complete`
+  - 启动时自动播放 `boot` 音效（仅一次）
+  - 新增设置项 `soundEnabled`（`AppSettings`），默认开启
+  - 各音效独立冷却时间（1~3 秒），防止重复触发
+
 ## [v1.0.4] - 2026-05-19
 
 ### 变更

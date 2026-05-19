@@ -65,6 +65,7 @@ export interface AppSettings {
   theme: 'dark' | 'light' | 'auto'
   shortcut: string
   opacity: number
+  soundEnabled: boolean
 }
 
 /**

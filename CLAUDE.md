@@ -61,6 +61,17 @@ npm run typecheck
 
 **关键细节**：渲染器的 `startLoop(getStatus)` 接受一个每帧调用的回调。CollapsedBar 通过这种方式将吉祥物状态接入 canvas——返回的状态改变后，下一帧立即切换渲染场景。
 
+### 音效系统
+
+`SoundService`（`src/services/soundService.ts`）为单例，预加载 6 个 8-bit WAV 音效文件，通过 HTML5 Audio API 播放。
+
+**触发场景**：在 `notchStore.updateSessions()` 中对比 `previousSessions` 与当前 `sessions`，检测每个会话的状态转换：
+- `sleeping → working/thinking/tool_use/responding` → 播放 `start`（AI 开始工作）
+- `any → waitingApproval` → 播放 `approval`（需要用户确认）
+- `active → sleeping` → 播放 `complete`（工作完成）
+
+**控制机制**：每个音效有独立冷却时间（1~3 秒）防止重复触发；支持全局开关 `soundEnabled`（`AppSettings` 的一部分，默认开启）。应用启动时播放一次 `boot` 音效。
+
 ### 状态管理
 
 `useNotchStore`（Pinia，`src/stores/notchStore.ts`）是渲染进程中的唯一真相源：
@@ -142,7 +153,7 @@ src/               # 渲染进程代码
   components/      # Vue 组件
   stores/          # Pinia stores
   renderer/canvas/ # Canvas 2D 引擎
-  services/        # 服务层（模拟数据等）
+  services/        # 服务层（音效、模拟数据等）
   styles/          # 全局样式、动画
   types/           # TypeScript 类型定义
   App.vue          # 根组件
@@ -198,7 +209,7 @@ docs/              # 项目文档（必须维护）
 | 文档 | 最后更新 | 说明 |
 |------|---------|------|
 | `requirements.md` | v1.0.4 | FR-1 ~ FR-7 需求定义，含 6 状态 + 370px 展开高度 |
-| `features.md` | v1.0.4 | 6 状态会话监控、统一状态提示展示、嵌套 tool_use 修复 |
-| `changelog.md` | v1.0.4 | 2026-05-19 发布，v1.0.4 统一状态展示 + mascotStatus 计算属性 |
+| `features.md` | v1.0.5 | 新增音效系统模块说明 |
+| `changelog.md` | v1.0.5 | 2026-05-19 发布，v1.0.5 音效系统 |
 | `claude-session-format.md` | v1.0.4 | Claude Code 日志格式规范（sessions.json + jsonl 事件类型） |
 | `expanded-panel-roadmap.md` | v1.0.0 | 展开面板功能拆解、待开发项、版本规划 |

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Session, AgentGroupData, AgentType, AppSettings, DockPosition } from '../types'
+import type { Session, AgentGroupData, AgentType, AppSettings, DockPosition, SessionStatus } from '../types'
+import { soundService } from '../services/soundService'
 
 /**
  * Pinia Store - 灵动岛状态管理
@@ -11,13 +12,15 @@ export const useNotchStore = defineStore('notch', () => {
   const isExpanded = ref(false)
   const activeTab = ref<'all' | 'sta' | 'cli'>('all')
   const sessions = ref<Session[]>([])
+  const previousSessions = ref<Session[]>([])
   const dockPosition = ref<DockPosition>('none')
   const settings = ref<AppSettings>({
     autoStart: false,
     edgeDock: true,
     theme: 'dark',
     shortcut: 'Ctrl+Shift+V',
-    opacity: 0.95
+    opacity: 0.95,
+    soundEnabled: true
   })
   const isSettingsOpen = ref(false)
 
@@ -116,8 +119,43 @@ export const useNotchStore = defineStore('notch', () => {
     activeTab.value = tab
   }
 
+  /** 活跃状态集合 */
+  const activeStatuses: SessionStatus[] = ['working', 'thinking', 'tool_use', 'responding']
+
+  /**
+   * 检测状态变化并触发对应音效
+   */
+  function detectStateChanges(prev: Session[], curr: Session[]): void {
+    const prevMap = new Map(prev.map((s) => [s.id, s.status]))
+
+    for (const session of curr) {
+      const prevStatus = prevMap.get(session.id)
+      if (!prevStatus || prevStatus === session.status) continue
+
+      const wasSleeping = prevStatus === 'sleeping'
+      const wasActive = activeStatuses.includes(prevStatus)
+      const wasWaiting = prevStatus === 'waitingApproval'
+      const isActive = activeStatuses.includes(session.status)
+      const isWaiting = session.status === 'waitingApproval'
+      const isSleeping = session.status === 'sleeping'
+
+      if (wasSleeping && isActive) {
+        // 从空闲变为活跃：AI 开始工作
+        soundService.play('start')
+      } else if (isWaiting) {
+        // 变为等待确认
+        soundService.play('approval')
+      } else if ((wasActive || wasWaiting) && isSleeping) {
+        // 从活跃或等待变为空闲：工作完成
+        soundService.play('complete')
+      }
+    }
+  }
+
   /** 更新会话数据 */
   function updateSessions(newSessions: Session[]): void {
+    detectStateChanges(previousSessions.value, newSessions)
+    previousSessions.value = newSessions
     sessions.value = newSessions
   }
 
@@ -158,8 +196,16 @@ export const useNotchStore = defineStore('notch', () => {
   /** 更新设置 */
   function updateSettings(newSettings: Partial<AppSettings>): void {
     settings.value = { ...settings.value, ...newSettings }
+    // 同步音效开关状态
+    soundService.setEnabled(settings.value.soundEnabled)
     // 同步到主进程
     window.electronAPI?.setSettings?.(settings.value)
+  }
+
+  /** 播放启动音效 */
+  function playBootSound(): void {
+    soundService.setEnabled(settings.value.soundEnabled)
+    soundService.playBoot()
   }
 
   return {
@@ -167,6 +213,7 @@ export const useNotchStore = defineStore('notch', () => {
     isExpanded,
     activeTab,
     sessions,
+    previousSessions,
     dockPosition,
     settings,
     isSettingsOpen,
@@ -187,6 +234,7 @@ export const useNotchStore = defineStore('notch', () => {
     dockToEdge,
     openSettings,
     closeSettings,
-    updateSettings
+    updateSettings,
+    playBootSound
   }
 })

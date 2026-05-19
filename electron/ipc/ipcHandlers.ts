@@ -8,7 +8,8 @@ const defaultSettings: AppSettings = {
   edgeDock: true,
   theme: 'dark',
   shortcut: 'Ctrl+Shift+V',
-  opacity: 0.95
+  opacity: 0.95,
+  soundEnabled: true
 }
 
 let currentSettings: AppSettings = { ...defaultSettings }

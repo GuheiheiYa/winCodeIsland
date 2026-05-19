@@ -5,7 +5,7 @@
  */
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useNotchStore } from './stores/notchStore'
-import { onSessionsUpdate, onExpandChanged } from './composables/useElectron'
+import { onSessionsUpdate, onExpandChanged, onSettingsChanged, getSettings } from './composables/useElectron'
 import { startMockUpdates } from './services/mockSessionService'
 import type { Session } from './types'
 import CollapsedBar from './components/CollapsedBar.vue'
@@ -15,6 +15,7 @@ const store = useNotchStore()
 const containerRef = ref<HTMLDivElement | null>(null)
 let unsubSessions: (() => void) | undefined
 let unsubExpand: (() => void) | undefined
+let unsubSettings: (() => void) | undefined
 let cleanupMock: (() => void) | undefined
 
 /**
@@ -43,10 +44,17 @@ function handleClickOutside(event: MouseEvent): void {
 }
 
 /**
- * 初始化：加载静态数据 + 监听 IPC 事件和模拟数据
+ * 初始化：加载设置 + 监听 IPC 事件和模拟数据
  */
-function initializeApp(): void {
-  // ========== 1. 监听主进程发来的会话更新（node-pty 真实数据）==========
+async function initializeApp(): Promise<void> {
+  // ========== 0. 加载设置并同步音效开关 ==========
+  const savedSettings = await getSettings()
+  if (savedSettings) {
+    store.updateSettings(savedSettings)
+  }
+  store.playBootSound()
+
+  // ========== 1. 监听主进程发来的会话更新 ==========
   unsubSessions = onSessionsUpdate((sessions: Session[]) => {
     store.updateSessions(sessions)
   })
@@ -56,7 +64,12 @@ function initializeApp(): void {
     store.setExpanded(expanded)
   })
 
-  // ========== 3. 如果在浏览器环境（开发），启动定时更新（thinking 光标闪烁等）==========
+  // ========== 3. 监听设置变更（来自主进程）==========
+  unsubSettings = onSettingsChanged((newSettings) => {
+    store.updateSettings(newSettings)
+  })
+
+  // ========== 4. 如果在浏览器环境（开发），启动定时更新 ==========
   if (!window.electronAPI) {
     cleanupMock = startMockUpdates((sessions: Session[]) => {
       store.updateSessions(sessions)
@@ -104,6 +117,7 @@ onMounted(() => {
 onUnmounted(() => {
   unsubSessions?.()
   unsubExpand?.()
+  unsubSettings?.()
   cleanupMock?.()
   document.removeEventListener('mousedown', handleClickOutside)
   cleanupMouseIgnore?.()
