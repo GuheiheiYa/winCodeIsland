@@ -11,6 +11,7 @@ import { CanvasRenderer } from '../renderer/canvas/canvas-renderer'
 const store = useNotchStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let renderer: CanvasRenderer | null = null
+let statusTimer: ReturnType<typeof setInterval> | null = null
 let dotsTimer: ReturnType<typeof setInterval> | null = null
 
 const emit = defineEmits<{
@@ -20,14 +21,13 @@ const emit = defineEmits<{
 /** 总会话数 */
 const totalSessions = computed(() => store.sessionCount)
 
-/** 当前 mascot 状态 */
-const mascotStatus = computed(() => {
-  const hasWorking = store.sessions.some((s) => s.status === 'working')
-  const hasThinking = store.sessions.some((s) => s.status === 'thinking')
-
-  if (hasWorking || hasThinking) return 'processing'
-  return 'idle'
-})
+/** 轮询演示状态 */
+const mascotStatus = ref<'idle' | 'processing' | 'waitingApproval'>('idle')
+const STATUS_CYCLE: Array<'idle' | 'processing' | 'waitingApproval'> = [
+  'idle',
+  'processing',
+  'waitingApproval',
+]
 
 /** 状态对应的文案、颜色 */
 const statusMeta = computed(() => {
@@ -67,17 +67,28 @@ onMounted(() => {
   renderer.setSpeed(1.2)
   renderer.startLoop(() => mascotStatus.value)
 
-  // 省略号动画: '' → '.' → '..' → '...' 循环
+  // 每 3 秒轮询切换 mascot 状态
   let idx = 0
+  statusTimer = setInterval(() => {
+    idx = (idx + 1) % STATUS_CYCLE.length
+    mascotStatus.value = STATUS_CYCLE[idx]
+  }, 3000)
+
+  // 省略号动画: '' → '.' → '..' → '...' 循环
+  let dIdx = 0
   dotsTimer = setInterval(() => {
-    idx = (idx + 1) % DOTS_CYCLE.length
-    dots.value = DOTS_CYCLE[idx]
+    dIdx = (dIdx + 1) % DOTS_CYCLE.length
+    dots.value = DOTS_CYCLE[dIdx]
   }, 450)
 })
 
 onUnmounted(() => {
   renderer?.stopLoop()
   renderer = null
+  if (statusTimer) {
+    clearInterval(statusTimer)
+    statusTimer = null
+  }
   if (dotsTimer) {
     clearInterval(dotsTimer)
     dotsTimer = null
