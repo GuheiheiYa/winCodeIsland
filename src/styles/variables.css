@@ -5,9 +5,9 @@
 
 :root {
   /* ===== 背景色 ===== */
-  --bg-panel: rgba(15, 15, 25, 0.96);
-  --bg-primary: #0d0d1a;
-  --bg-secondary: rgba(15, 15, 25, 0.96);
+  --bg-panel: rgba(10, 10, 18, 0.98);
+  --bg-primary: #080810;
+  --bg-secondary: rgba(10, 10, 18, 0.98);
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
   --bg-input: rgba(25, 25, 40, 0.8);

@@ -53,8 +53,8 @@ const store = useNotchStore()
   display: flex;
   flex-direction: column;
   width: 560px;
-  height: auto;
-  max-height: 85vh;
+  min-height: 280px;
+  max-height: 340px;
   background: var(--bg-secondary);
   backdrop-filter: blur(40px) saturate(1.2);
   -webkit-backdrop-filter: blur(40px) saturate(1.2);

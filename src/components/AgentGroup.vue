@@ -15,22 +15,9 @@ const props = defineProps<{
 /** 助手图标颜色配置 */
 const agentStyles: Record<string, { icon: string; color: string; iconBg: string }> = {
   claude: {
-    // 太阳图标 - 橙色
-    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" fill="#fb923c"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" stroke="#fb923c" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    icon: '/resources/cli-icons/claude.png',
     color: '#fb923c',
     iconBg: 'rgba(251, 146, 60, 0.15)'
-  },
-  codex: {
-    // 紫色方形网格图标
-    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="#8b5cf6" opacity="0.9"/><path d="M8 3v18M16 3v18M3 8h18M3 16h18" stroke="#a78bfa" stroke-width="1"/><circle cx="8" cy="8" r="1.5" fill="white"/><circle cx="16" cy="16" r="1.5" fill="white"/></svg>`,
-    color: '#8b5cf6',
-    iconBg: 'rgba(139, 92, 246, 0.15)'
-  },
-  gemini: {
-    // 钻石/菱形图标 - 紫色
-    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L22 9L12 22L2 9Z" fill="#8b5cf6"/><path d="M12 2L22 9L12 22L2 9Z" fill="url(#gemini-grad)" opacity="0.8"/><defs><linearGradient id="gemini-grad" x1="2" y1="2" x2="22" y2="22"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs></svg>`,
-    color: '#8b5cf6',
-    iconBg: 'rgba(139, 92, 246, 0.15)'
   }
 }
 
@@ -50,8 +37,8 @@ const displayAgentName = computed(() => agentNameMap[props.group.agentType] || p
   <div class="agent-group">
     <!-- 助手标题栏 -->
     <div class="agent-header">
-      <div class="agent-icon" :style="{ background: style.iconBg, color: style.color }">
-        <div v-html="style.icon" />
+      <div class="agent-icon" :style="{ background: style.iconBg }">
+        <img :src="style.icon" width="18" height="18" />
       </div>
       <span class="agent-name" :style="{ color: style.color }">
         {{ displayAgentName }}

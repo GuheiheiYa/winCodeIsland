@@ -5,8 +5,12 @@
  * 参考设计：img_1.png 顶部区域
  */
 import { useNotchStore } from '../stores/notchStore'
+import { CanvasRenderer } from '../renderer/canvas/canvas-renderer'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const store = useNotchStore()
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+let renderer: CanvasRenderer | null = null
 
 const emit = defineEmits<{
   collapse: []
@@ -27,9 +31,29 @@ function handleCollapse(): void {
   emit('collapse')
 }
 
-function handleOpenSettings(): void {
-  store.openSettings()
-}
+onMounted(() => {
+  const canvas = canvasRef.value
+  if (!canvas) return
+
+  const dpr = window.devicePixelRatio || 1
+  const cssW = 28
+  const cssH = 24
+
+  canvas.width = cssW * dpr
+  canvas.height = cssH * dpr
+  canvas.style.width = `${cssW}px`
+  canvas.style.height = `${cssH}px`
+
+  renderer = new CanvasRenderer(canvas)
+  renderer.setSpeed(1.2)
+  renderer.startLoop(() => store.mascotStatus)
+})
+
+onUnmounted(() => {
+  renderer?.stopLoop()
+  renderer = null
+})
+
 </script>
 
 <template>
@@ -37,7 +61,7 @@ function handleOpenSettings(): void {
     <!-- 左侧：带图标的标签 -->
     <div class="tabs-section">
       <span class="tab-brand-icon">
-        <img src="/logo.png" width="16" height="16" />
+        <canvas ref="canvasRef" class="mascot-canvas" />
       </span>
       <div class="tabs">
         <button
@@ -59,13 +83,6 @@ function handleOpenSettings(): void {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-        </svg>
-      </button>
-      <!-- 设置 -->
-      <button class="icon-btn settings-btn" title="设置" @click="handleOpenSettings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       </button>
       <!-- 关闭/电源 - 红色 -->
@@ -101,15 +118,14 @@ function handleOpenSettings(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  opacity: 0.8;
+  width: 36px;
+  height: 36px;
+  opacity: 0.95;
 }
 
-.tab-brand-icon img {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+.mascot-canvas {
+  display: block;
+  image-rendering: pixelated;
 }
 
 .tabs {

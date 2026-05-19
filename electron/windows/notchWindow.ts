@@ -19,7 +19,8 @@ export class NotchWindowManager {
 
   // 展开状态尺寸
   private readonly expandedWidth = 560
-  private readonly expandedHeight = 680
+  private readonly expandedMaxHeightRatio = 0.8 // 最大占屏幕高度的 80%
+  private readonly expandedFixedHeight = 340 // 展开面板固定高度（内容可滚动）
 
   create(): BrowserWindow {
     const primaryDisplay = screen.getPrimaryDisplay()
@@ -55,6 +56,11 @@ export class NotchWindowManager {
 
     // 设置窗口层级（Windows 置顶）
     this.window.setAlwaysOnTop(true, 'screen-saver')
+
+    // 默认穿透透明区域（Windows），由渲染进程动态控制内容区域是否接收事件
+    if (process.platform === 'win32') {
+      this.window.setIgnoreMouseEvents(true, { forward: true })
+    }
 
     // 监听窗口移动（拖拽结束检测贴边）
     this.setupDragListeners()
@@ -122,6 +128,7 @@ export class NotchWindowManager {
     this.setExpanded(!this.isExpanded)
   }
 
+
   /**
    * 设置展开状态
    */
@@ -132,13 +139,12 @@ export class NotchWindowManager {
     const primaryDisplay = screen.getPrimaryDisplay()
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
     const currentPos = this.window.getPosition()
-    const centerX = Math.round(screenWidth / 2)
+    const maxHeight = Math.round(screenHeight * this.expandedMaxHeightRatio)
 
     if (expanded) {
-      // 展开 - 变为较大面板
+      // 展开 - 固定高度，内容在面板内部滚动
       const newWidth = this.expandedWidth
-      const newHeight = this.expandedHeight
-      // 从当前位置向中心展开
+      const newHeight = Math.min(this.expandedFixedHeight, maxHeight)
       const newX = Math.round(Math.min(
         Math.max(currentPos[0] + this.collapsedWidth / 2 - newWidth / 2, 0),
         screenWidth - newWidth

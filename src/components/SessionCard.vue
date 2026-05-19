@@ -1,181 +1,150 @@
 <script setup lang="ts">
 /**
  * SessionCard - 会话卡片组件
- * 显示项目图标、名称、时间、终端类型、终端输出等
- * 参考设计：img_1.png 中的各个会话卡片
+ * 布局：左[动态章鱼] | 中[项目名+编号/下划线/终端输出] | 右[时间/终端类型]
+ * 参考设计：notch-panel.png
  */
 import { computed } from 'vue'
-import type { Session, SessionStatus } from '../types'
+import type { Session } from '../types'
 import TerminalOutput from './TerminalOutput.vue'
 
 const props = defineProps<{
   session: Session
 }>()
 
-/** 状态标签配置 */
-const statusConfig: Record<SessionStatus, { label: string; color: string; hasCursor: boolean; hasZzz: boolean }> = {
-  working: { label: '', color: '#4ade80', hasCursor: false, hasZzz: false },
-  sleeping: { label: '', color: '#60a5fa', hasCursor: false, hasZzz: true },
-  thinking: { label: '', color: '#fb923c', hasCursor: true, hasZzz: false }
-}
-
-/** 根据项目名生成像素风图标 */
-const projectIcon = computed(() => {
-  const name = props.session.projectName.toLowerCase()
-  // 为特定项目返回特定图标
-  if (name.includes('vibe')) return 'castle'
-  if (name.includes('api')) return 'skull'
-  if (name.includes('web')) return 'star'
-  if (name.includes('wxt')) return 'castle'
-  // 默认图标类型
-  const icons = ['castle', 'skull', 'star']
-  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  return icons[hash % icons.length]
-})
-
-/** 项目名称显示颜色 */
-const projectNameColor = computed(() => {
-  if (props.session.status === 'thinking') {
-    return 'var(--accent-green)'
-  }
-  return 'var(--text-primary)'
-})
-
-/** 终端类型圆点颜色 */
-const terminalDotColor = computed(() => {
-  switch (props.session.terminalType) {
-    case 'ghostty':
-      return props.session.agentType === 'codex' ? '#3b82f6' : '#4ade80'
-    case 'iterm2':
-      return '#f59e0b'
+/** 根据会话状态返回像素章鱼图标类型 */
+const statusIcon = computed(() => {
+  switch (props.session.status) {
+    case 'working':
+      return 'working'
+    case 'sleeping':
+      return 'sleeping'
+    case 'thinking':
+      return 'thinking'
     default:
-      return '#4ade80'
-  }
-})
-
-/** 终端类型文字颜色 */
-const terminalTextColor = computed(() => {
-  switch (props.session.terminalType) {
-    case 'ghostty':
-      return props.session.agentType === 'codex' ? '#60a5fa' : '#4ade80'
-    case 'iterm2':
-      return '#fb923c'
-    default:
-      return '#4ade80'
+      return 'sleeping'
   }
 })
 </script>
 
 <template>
-  <div
-    class="session-card"
-    :class="`status-${session.status}`"
-  >
-    <!-- 第一行：图标 + 项目名称/ID + 时间 + 终端类型 -->
-    <div class="card-header">
-      <!-- 左侧：项目图标 + 名称 -->
-      <div class="project-info">
-        <!-- 像素风项目图标 -->
-        <div class="project-icon-wrapper">
-          <!-- Sleeping 状态的 zzz -->
-          <div v-if="session.status === 'sleeping'" class="sleep-indicator">
-            <span class="zzz">z</span>
-            <span class="zzz zzz-delay">z</span>
-          </div>
-
-          <!-- 像素风图标 -->
-          <div class="pixel-icon" :class="projectIcon">
-            <!-- Castle 图标 (vibe-notch) -->
-            <template v-if="projectIcon === 'castle'">
-              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <!-- 城堡主体 -->
-                <rect x="6" y="10" width="20" height="14" rx="1" fill="#c4846a" />
-                <!-- 左塔 -->
-                <rect x="4" y="6" width="5" height="8" rx="0.5" fill="#d4846a" />
-                <!-- 中央高塔 -->
-                <rect x="12" y="4" width="8" height="10" rx="0.5" fill="#d4846a" />
-                <!-- 右塔 -->
-                <rect x="23" y="6" width="5" height="8" rx="0.5" fill="#d4846a" />
-                <!-- 左门 -->
-                <rect x="10" y="18" width="4" height="6" rx="1" fill="#5a3a2a" />
-                <!-- 右门 -->
-                <rect x="18" y="18" width="4" height="6" rx="1" fill="#5a3a2a" />
-                <!-- 窗户 -->
-                <rect x="14" y="14" width="4" height="3" rx="0.5" fill="#7ab8e8" />
-                <!-- 城垛 -->
-                <rect x="4" y="5" width="5" height="2" rx="0.5" fill="#b4745a" />
-                <rect x="12" y="3" width="8" height="2" rx="0.5" fill="#b4745a" />
-                <rect x="23" y="5" width="5" height="2" rx="0.5" fill="#b4745a" />
-              </svg>
-            </template>
-            <!-- Skull 图标 (api) -->
-            <template v-if="projectIcon === 'skull'">
-              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <!-- 头骨主体 -->
-                <rect x="7" y="5" width="18" height="18" rx="5" fill="#e0e0e0" />
-                <!-- 左眼 -->
-                <rect x="10" y="11" width="4" height="5" rx="1" fill="#3a3a3a" />
-                <!-- 右眼 -->
-                <rect x="18" y="11" width="4" height="5" rx="1" fill="#3a3a3a" />
-                <!-- 鼻子 -->
-                <rect x="14" y="17" width="4" height="2" rx="0.5" fill="#3a3a3a" />
-                <!-- 牙齿 -->
-                <rect x="12" y="23" width="2" height="3" rx="0.5" fill="#c0c0c0" />
-                <rect x="15" y="23" width="2" height="3" rx="0.5" fill="#c0c0c0" />
-                <rect x="18" y="23" width="2" height="3" rx="0.5" fill="#c0c0c0" />
-              </svg>
-            </template>
-            <!-- Star/Diamond 图标 (web) -->
-            <template v-if="projectIcon === 'star'">
-              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <!-- 四角星/钻石形状 -->
-                <path d="M16 3L20 12L29 16L20 20L16 29L12 20L3 16L12 12Z" fill="#8b5cf6" />
-                <!-- 中心高光 -->
-                <path d="M16 8L17.5 13.5L23 16L17.5 18.5L16 24L14.5 18.5L9 16L14.5 13.5Z" fill="#a78bfa" />
-              </svg>
-            </template>
-          </div>
-        </div>
-
-        <!-- 项目名称和 ID -->
-        <div class="project-name-section">
-          <span class="project-name" :style="{ color: projectNameColor }">
-            {{ session.projectName }}
-          </span>
-          <span v-if="session.sessionNumber" class="session-number">
-            {{ session.sessionNumber }}
-          </span>
-        </div>
-      </div>
-
-      <!-- 右侧：时间标签 + 终端类型 -->
-      <div class="meta-info">
-        <!-- 时间标签 -->
-        <span class="time-badge">{{ session.relativeTime }}</span>
-
-        <!-- 终端类型标签 -->
-        <div class="terminal-badge">
-          <span class="terminal-dot" :style="{ background: terminalDotColor }" />
-          <span class="terminal-name" :style="{ color: terminalTextColor }">{{ session.terminalType }}</span>
-          <svg class="terminal-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M9 18l6-6-6-6" />
+  <div class="session-card" :class="`status-${session.status}`">
+    <!-- 左列：动态章鱼图标 -->
+    <div class="card-left">
+      <div class="pixel-icon" :class="statusIcon">
+        <!-- Sleeping 章鱼 - 精确复刻 Canvas idle 场景坐标 -->
+        <template v-if="statusIcon === 'sleeping'">
+          <svg class="octopus-body" width="44" height="44" viewBox="-2 3 20 14" fill="none">
+            <!-- 阴影: rect(-1, 15, 17, 1) -->
+            <rect x="-1" y="15" width="17" height="1" fill="rgba(0,0,0,0.3)" />
+            <!-- 4条腿: rect(3, 8.5, 1, 1.5) 间距2 -->
+            <rect x="3" y="8.5" width="1" height="1.5" fill="#DE886D" />
+            <rect x="5" y="8.5" width="1" height="1.5" fill="#DE886D" />
+            <rect x="9" y="8.5" width="1" height="1.5" fill="#DE886D" />
+            <rect x="11" y="8.5" width="1" height="1.5" fill="#DE886D" />
+            <!-- 躯体: rect(2, 10, 13, 5) -->
+            <rect x="2" y="10" width="13" height="5" rx="0.3" fill="#DE886D" />
+            <!-- 手臂（平放）: rect(-1, 13, 2, 2) / rect(14, 13, 2, 2) -->
+            <rect x="-1" y="13" width="2" height="2" fill="#DE886D" />
+            <rect x="14" y="13" width="2" height="2" fill="#DE886D" />
+            <!-- 闭眼（黑色水平线）: rect(3, 12.2, 2.5, 1.0) -->
+            <rect x="3" y="12.2" width="2.5" height="1" fill="#000000" />
+            <rect x="9.5" y="12.2" width="2.5" height="1" fill="#000000" />
+            <!-- 浮动 Zzz -->
+            <text class="floating-z" x="14" y="7" fill="white" font-size="2.5" font-family="monospace" font-weight="bold">z</text>
           </svg>
-        </div>
+        </template>
+        <!-- Working 章鱼 - 精确复刻 Canvas work 场景坐标 -->
+        <template v-if="statusIcon === 'working'">
+          <svg class="octopus-body" width="44" height="44" viewBox="-2 3 20 14" fill="none">
+            <!-- 阴影: rect(3, 15, 9, 1) -->
+            <rect x="3" y="15" width="9" height="1" fill="rgba(0,0,0,0.3)" />
+            <!-- 键盘底座: rect(-0.5, 11.8, 16, 3.5) -->
+            <rect x="-0.5" y="11.8" width="16" height="3.5" rx="0.3" fill="#617080" />
+            <!-- 键盘按键（6列x3行，代表性显示） -->
+            <rect x="0.3" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <rect x="2.8" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <rect x="5.3" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <rect x="7.8" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <rect x="10.3" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <rect x="12.8" y="12.2" width="2" height="0.7" rx="0.1" fill="#99A9B8" />
+            <!-- 4条腿: rect(3, 13, 1, 2) -->
+            <rect x="3" y="13" width="1" height="2" fill="#DE886D" />
+            <rect x="5" y="13" width="1" height="2" fill="#DE886D" />
+            <rect x="9" y="13" width="1" height="2" fill="#DE886D" />
+            <rect x="11" y="13" width="1" height="2" fill="#DE886D" />
+            <!-- 躯体: rect(2, 6, 11, 7) -->
+            <rect x="2" y="6" width="11" height="7" rx="0.3" fill="#DE886D" />
+            <!-- 手臂（打字动画） -->
+            <rect class="arm-left" x="0" y="9" width="2" height="2" fill="#DE886D" />
+            <rect class="arm-right" x="13" y="9" width="2" height="2" fill="#DE886D" />
+            <!-- 眯眼: rect(4, 8.5, 1, 1) -->
+            <rect x="4" y="8.5" width="1" height="1" fill="#000000" />
+            <rect x="10" y="8.5" width="1" height="1" fill="#000000" />
+          </svg>
+        </template>
+        <!-- Thinking/Alert 章鱼 - 精确复刻 Canvas alert 场景坐标 -->
+        <template v-if="statusIcon === 'thinking'">
+          <svg class="octopus-body" width="44" height="44" viewBox="-2 3 20 14" fill="none">
+            <!-- 阴影: rect(3, 15, 9, 1) -->
+            <rect x="3" y="15" width="9" height="1" fill="rgba(0,0,0,0.3)" />
+            <!-- 4条腿: rect(3, 11, 1, 4) -->
+            <rect x="3" y="11" width="1" height="4" fill="#DE886D" />
+            <rect x="5" y="11" width="1" height="4" fill="#DE886D" />
+            <rect x="9" y="11" width="1" height="4" fill="#DE886D" />
+            <rect x="11" y="11" width="1" height="4" fill="#DE886D" />
+            <!-- 躯体: rect(2, 6, 11, 7) -->
+            <rect x="2" y="6" width="11" height="7" rx="0.3" fill="#DE886D" />
+            <!-- 手臂（挥舞）pivot(2,10) 角度-40° / pivot(13,10) 角度155° -->
+            <rect x="0" y="9" width="2" height="2" fill="#DE886D" transform="rotate(-40 1 10)" />
+            <rect x="13" y="9" width="2" height="2" fill="#DE886D" transform="rotate(155 14 10)" />
+            <!-- 大眼（惊吓）: rect(4, 7.5, 1, 2.6) -->
+            <rect x="4" y="7.5" width="1" height="2.6" rx="0.2" fill="#000000" />
+            <rect x="10" y="7.5" width="1" height="2.6" rx="0.2" fill="#000000" />
+            <!-- 感叹号: rect(13, 4.5, 2, 3.5) -->
+            <rect class="alert-bang" x="13" y="4.5" width="2" height="3.5" rx="0.2" fill="#FF3D00" />
+            <rect class="alert-bang" x="13" y="8.5" width="2" height="1.5" rx="0.2" fill="#FF3D00" />
+          </svg>
+        </template>
       </div>
     </div>
 
-    <!-- 第二行：终端输出 -->
-    <div class="terminal-output">
-      <TerminalOutput :lines="session.lastOutput" :status="session.status" />
+    <!-- 中列：项目信息 + 终端输出 -->
+    <div class="card-center">
+      <!-- 项目名行（带下划线） -->
+      <div class="project-header">
+        <div class="project-title">
+          <span class="project-name">{{ session.projectName }}</span>
+          <span v-if="session.sessionNumber" class="session-number">{{ session.sessionNumber }}</span>
+        </div>
+        <div class="divider-line" />
+      </div>
+
+      <!-- 终端输出 -->
+      <div class="terminal-output">
+        <TerminalOutput :lines="session.lastOutput" :status="session.status" />
+      </div>
+    </div>
+
+    <!-- 右列：时间 + 终端类型 -->
+    <div class="card-right">
+      <span class="time-badge">{{ session.relativeTime }}</span>
+      <div class="terminal-badge" :class="`status-${session.status}`">
+        <span class="terminal-name">{{ session.terminalType }}</span>
+        <span class="terminal-arrow">→</span>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .session-card {
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
   animation: fadeInUp 0.25s ease backwards;
@@ -186,82 +155,124 @@ const terminalTextColor = computed(() => {
   border-color: var(--border-color-hover);
 }
 
-/* ===== 卡片头部 ===== */
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
+/* ===== 左列：章鱼图标 ===== */
+.card-left {
+  flex-shrink: 0;
+  width: 44px;
+  padding-top: 2px;
 }
 
-/* ===== 项目信息 ===== */
-.project-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.project-icon-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Sleeping zzz 指示器 */
-.sleep-indicator {
-  position: absolute;
-  top: -6px;
-  right: -8px;
-  display: flex;
-  align-items: flex-end;
-  gap: 0;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.zzz {
-  font-size: 8px;
-  font-weight: 700;
-  color: var(--accent-blue);
-  opacity: 0.7;
-  animation: breathe 2s ease infinite;
-  line-height: 1;
-}
-
-.zzz-delay {
-  animation-delay: 0.5s;
-  font-size: 6px;
-  margin-left: -1px;
-}
-
-/* 像素风图标 */
 .pixel-icon {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.9;
 }
 
-.pixel-icon.castle {
-  filter: drop-shadow(0 0 2px rgba(212, 132, 106, 0.3));
+/* Sleeping: 呼吸缩放 + Zzz 浮动 */
+.pixel-icon.sleeping .octopus-body {
+  animation: octoBreathe 2.25s ease-in-out infinite;
+  transform-origin: center bottom;
 }
 
-.pixel-icon.skull {
-  filter: drop-shadow(0 0 2px rgba(200, 200, 200, 0.2));
+.pixel-icon.sleeping .floating-z {
+  animation: zFloat 2.8s ease-in-out infinite;
 }
 
-.pixel-icon.star {
-  filter: drop-shadow(0 0 2px rgba(240, 192, 96, 0.3));
+@keyframes octoBreathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.03) translateY(-1px); }
 }
 
-/* 项目名称区域 */
-.project-name-section {
+@keyframes zFloat {
+  0% { transform: translateY(0); opacity: 0.7; }
+  50% { transform: translateY(-3px); opacity: 0.3; }
+  100% { transform: translateY(-5px); opacity: 0; }
+}
+
+/* Working: 弹跳（0.35s 周期，与 Canvas 同步） */
+.pixel-icon.working .octopus-body {
+  animation: octoBounce 0.35s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes octoBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* Working: 手臂打字动画 */
+.pixel-icon.working .arm-left {
+  transform-origin: 50% 50%;
+  transform-box: fill-box;
+  animation: armLeftType 0.15s ease-in-out infinite alternate;
+}
+
+.pixel-icon.working .arm-right {
+  transform-origin: 50% 50%;
+  transform-box: fill-box;
+  animation: armRightType 0.12s ease-in-out infinite alternate;
+}
+
+@keyframes armLeftType {
+  0% { transform: rotate(-55deg); }
+  100% { transform: rotate(-10deg); }
+}
+
+@keyframes armRightType {
+  0% { transform: rotate(10deg); }
+  100% { transform: rotate(55deg); }
+}
+
+/* Thinking: 轻微弹跳 + 感叹号闪烁 */
+.pixel-icon.thinking .octopus-body {
+  animation: octoAlert 0.5s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.pixel-icon.thinking .alert-bang {
+  animation: bangPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes octoAlert {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.02, 0.98); }
+}
+
+@keyframes bangPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 状态滤镜 */
+.status-sleeping .pixel-icon {
+  opacity: 0.85;
+}
+
+.status-working .pixel-icon {
+  filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.25));
+}
+
+.status-thinking .pixel-icon {
+  filter: drop-shadow(0 0 3px rgba(255, 61, 0, 0.3));
+}
+
+/* ===== 中列：项目信息 + 输出 ===== */
+.card-center {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-header {
+  margin-bottom: 4px;
+}
+
+.project-title {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 4px;
 }
 
 .project-name {
@@ -269,6 +280,15 @@ const terminalTextColor = computed(() => {
   font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.status-working .project-name {
+  color: var(--accent-green);
+}
+
+.status-thinking .project-name {
+  color: var(--accent-orange);
 }
 
 .session-number {
@@ -277,22 +297,38 @@ const terminalTextColor = computed(() => {
   color: var(--text-muted);
 }
 
-/* ===== 元信息区域 ===== */
-.meta-info {
+/* 下划线分隔 */
+.divider-line {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 终端输出 */
+.terminal-output {
+  margin-top: 4px;
+}
+
+/* ===== 右列：时间 + 终端类型 ===== */
+.card-right {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding-top: 2px;
+  margin-left: 8px;
 }
 
 /* 时间标签 */
 .time-badge {
+  display: inline-flex;
+  align-items: center;
   padding: 2px 8px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.6);
   background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* 终端类型标签 */
@@ -301,53 +337,39 @@ const terminalTextColor = computed(() => {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--text-secondary);
+  text-transform: capitalize;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
+/* 终端类型颜色按状态区分 */
+.terminal-badge.status-working {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.terminal-badge.status-thinking {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.2);
+}
+
+.terminal-badge.status-sleeping {
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .terminal-badge:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-color-hover);
-}
-
-.terminal-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.terminal-name {
-  text-transform: capitalize;
+  filter: brightness(1.2);
 }
 
 .terminal-arrow {
-  color: var(--text-muted);
   opacity: 0.6;
-}
-
-/* ===== 终端输出区域 ===== */
-.terminal-output {
-  margin-top: 4px;
-  padding-left: 46px;
-}
-
-/* ===== 状态变体 ===== */
-.status-thinking .project-name {
-  color: var(--accent-green);
-}
-
-.status-sleeping .pixel-icon {
-  opacity: 0.6;
-  filter: grayscale(0.3);
-}
-
-.status-working .pixel-icon {
-  animation: pulseGlow 2s ease infinite;
+  font-size: 10px;
 }
 </style>

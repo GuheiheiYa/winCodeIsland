@@ -10,7 +10,7 @@
 │  │ CollapsedBar │  │ ExpandedPanel                       │  │
 │  │ (Pill 小条)  │  │ (完整面板)                          │  │
 │  │              │  │  ┌──────┐  ┌──────┐  ┌──────┐      │  │
-│  │ 🐙 运行中... │  │  │ TopBar│  │ 标签 │  │设置 │      │  │
+│  │ 🐙 运行中... │  │  │ TopBar│  │ 标签 │  │关闭 │      │  │
 │  │        3会话 │  │  └──────┘  └──────┘  └──────┘      │  │
 │  └──────────────┘  │  ┌───────────────────────────────┐  │  │
 │                    │  │ AgentGroup - Claude            │  │  │
@@ -25,10 +25,8 @@
 │                    │  └───────────────────────────────┘  │  │
 │                    └─────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
-│  Tray (系统托盘)  │  SettingsPanel (设置模态框)            │
-│  - 显示/隐藏      │  - 开机自启                             │
-│  - 开机启动       │  - 贴边吸附                             │
-│  - 退出           │  - 主题 / 快捷键 / 透明度               │
+│  Tray (系统托盘)                                            │
+│  - 显示/隐藏      │  - 开机启动    │  - 退出                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -43,7 +41,8 @@
 **关键实现**:
 - Canvas 2D 绘制像素章鱼吉祥物（26x22 CSS 像素，devicePixelRatio 适配）
 - `CanvasRenderer` 引擎驱动三种动画场景：idle / processing / waitingApproval
-- 轮询切换三种状态（每 3 秒循环），便于演示所有动画
+- 吉祥物状态由 Pinia store 全局管理（`notchStore.mascotStatus`），`CollapsedBar` 与 `TopBar` 共享同一状态
+- 应用启动时通过 `store.startMascotCycle()` 启动轮训（每 3 秒循环）
 - 状态文字 + 颜色 + 发光效果联动
 - 动态省略号动画（450ms 周期：'' → '.' → '..' → '...'）
 - 等宽字体营造科技像素风（Courier New / Consolas / Monaco）
@@ -63,7 +62,7 @@
 **职责**: 点击 Pill 小条后展开，展示完整的会话列表和详情。
 
 **关键实现**:
-- 尺寸 560px 宽，最大高度 85vh，带自定义滚动条
+- 尺寸 560px 宽，固定高度 340px（内容在面板内部滚动），带自定义滚动条
 - 底部圆角 24px，无边框顶部，micro-curve 弧线过渡
 - 按助手分组（Claude / Codex / Gemini）交错淡入动画
 - 空状态友好提示
@@ -75,10 +74,12 @@
 **职责**: 展开面板的顶部控制区。
 
 **功能**:
+- 左侧 Canvas 像素章鱼吉祥物（28x24 CSS 像素，与 CollapsedBar 共享状态）
 - ALL / STA / CLI 标签切换（过滤会话状态）
 - 音量按钮（预留声音提示接口）
-- 设置按钮（打开设置模态框）
-- 关闭按钮（收起面板）
+- 关闭按钮（红色电源图标，收起面板）
+
+> 设置功能当前版本已移除（设置面板组件保留但不再渲染）。
 
 ### 2.4 SessionCard - 会话卡片
 
@@ -106,13 +107,13 @@
 - Gemini（紫色钻石图标）
 - 按固定顺序渲染，空组自动隐藏
 
-### 2.6 SettingsPanel - 设置面板
+### 2.6 SettingsPanel - 设置面板（暂不启用）
 
 **文件**: `src/components/SettingsPanel.vue`
 
-**职责**: 模态框形式的应用设置。
+**职责**: 模态框形式的应用设置（组件保留但当前版本不再渲染）。
 
-**配置项**:
+**配置项**（预留）：
 | 配置项 | 类型 | 默认值 |
 |--------|------|--------|
 | 开机自启 | boolean | false |
@@ -210,6 +211,7 @@ interface AppState {
   activeTab: 'all' | 'sta' | 'cli'
   sessions: Session[]
   dockPosition: 'top' | 'bottom' | 'left' | 'right' | 'none'
+  mascotStatus: 'idle' | 'processing' | 'waitingApproval'
 }
 ```
 
@@ -246,7 +248,7 @@ interface AppState {
 | 状态 | 宽度 | 高度 | 位置 |
 |------|------|------|------|
 | 收起 | 300px | 36px | 屏幕顶部居中 |
-| 展开 | 560px | 680px（max 85vh） | 从收起位置向中心展开 |
+| 展开 | 560px | 340px（固定高度，内容滚动） | 从收起位置向中心展开 |
 
 ### 6.3 贴边吸附
 - 吸附阈值：40px
@@ -259,16 +261,18 @@ interface AppState {
 
 ```css
 :root {
-  --bg-primary: #0d0d1a;
-  --bg-secondary: rgba(20, 20, 35, 0.95);
-  --bg-card: rgba(35, 35, 50, 0.85);
-  --text-primary: #f0f0f5;
-  --text-secondary: rgba(240, 240, 245, 0.65);
-  --text-muted: rgba(240, 240, 245, 0.4);
+  --bg-panel: rgba(10, 10, 18, 0.98);
+  --bg-primary: #080810;
+  --bg-secondary: rgba(10, 10, 18, 0.98);
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-card-hover: rgba(255, 255, 255, 0.07);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.35);
   --accent-green: #4ade80;
   --accent-blue: #60a5fa;
   --accent-orange: #fb923c;
-  --accent-purple: #c084fc;
+  --accent-purple: #8b5cf6;
   --border-color: rgba(255, 255, 255, 0.06);
   --radius-full: 9999px;
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);

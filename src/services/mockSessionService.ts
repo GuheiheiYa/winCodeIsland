@@ -90,7 +90,7 @@ function getRelativeTime(timestamp: number): string {
  */
 export function createSession(partial: Partial<Session> = {}): Session {
   const projectName = partial.projectName || projectNames[Math.floor(Math.random() * projectNames.length)]
-  const agentType = partial.agentType || (['claude', 'codex', 'gemini'] as const)[Math.floor(Math.random() * 3)]
+  const agentType = partial.agentType || 'claude'
   const status = partial.status || (['working', 'sleeping', 'thinking'] as const)[Math.floor(Math.random() * 3)]
   const terminalType = partial.terminalType || (['ghostty', 'iterm2'] as const)[Math.floor(Math.random() * 2)]
 
@@ -177,9 +177,9 @@ export function generateInitialSessions(): Session[] {
     },
     {
       id: 'session-4',
-      projectName: 'api',
+      projectName: 'api-server',
       sessionNumber: undefined,
-      agentType: 'codex',
+      agentType: 'claude',
       terminalType: 'ghostty',
       status: 'thinking',
       lastOutput: [
@@ -191,9 +191,9 @@ export function generateInitialSessions(): Session[] {
     },
     {
       id: 'session-5',
-      projectName: 'web',
+      projectName: 'web-dashboard',
       sessionNumber: undefined,
-      agentType: 'gemini',
+      agentType: 'claude',
       terminalType: 'iterm2',
       status: 'sleeping',
       lastOutput: [],
@@ -221,7 +221,7 @@ export function generateInitialSessions(): Session[] {
       id: 'session-7',
       projectName: 'dashboard',
       sessionNumber: undefined,
-      agentType: 'codex',
+      agentType: 'claude',
       terminalType: 'ghostty',
       status: 'sleeping',
       lastOutput: [
@@ -233,9 +233,9 @@ export function generateInitialSessions(): Session[] {
     // thinking 状态
     {
       id: 'session-8',
-      projectName: 'docs',
+      projectName: 'docs-site',
       sessionNumber: undefined,
-      agentType: 'gemini',
+      agentType: 'claude',
       terminalType: 'iterm2',
       status: 'thinking',
       lastOutput: [

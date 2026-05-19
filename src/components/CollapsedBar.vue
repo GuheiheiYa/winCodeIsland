@@ -11,7 +11,6 @@ import { CanvasRenderer } from '../renderer/canvas/canvas-renderer'
 const store = useNotchStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let renderer: CanvasRenderer | null = null
-let statusTimer: ReturnType<typeof setInterval> | null = null
 let dotsTimer: ReturnType<typeof setInterval> | null = null
 
 const emit = defineEmits<{
@@ -21,17 +20,9 @@ const emit = defineEmits<{
 /** 总会话数 */
 const totalSessions = computed(() => store.sessionCount)
 
-/** 轮询演示状态 */
-const mascotStatus = ref<'idle' | 'processing' | 'waitingApproval'>('idle')
-const STATUS_CYCLE: Array<'idle' | 'processing' | 'waitingApproval'> = [
-  'idle',
-  'processing',
-  'waitingApproval',
-]
-
 /** 状态对应的文案、颜色 */
 const statusMeta = computed(() => {
-  switch (mascotStatus.value) {
+  switch (store.mascotStatus) {
     case 'processing':
       return { text: '运行中', color: '#4ade80', glow: 'rgba(74,222,128,0.45)' }
     case 'waitingApproval':
@@ -65,14 +56,7 @@ onMounted(() => {
 
   renderer = new CanvasRenderer(canvas)
   renderer.setSpeed(1.2)
-  renderer.startLoop(() => mascotStatus.value)
-
-  // 每 3 秒轮询切换 mascot 状态
-  let idx = 0
-  statusTimer = setInterval(() => {
-    idx = (idx + 1) % STATUS_CYCLE.length
-    mascotStatus.value = STATUS_CYCLE[idx]
-  }, 3000)
+  renderer.startLoop(() => store.mascotStatus)
 
   // 省略号动画: '' → '.' → '..' → '...' 循环
   let dIdx = 0
@@ -85,10 +69,6 @@ onMounted(() => {
 onUnmounted(() => {
   renderer?.stopLoop()
   renderer = null
-  if (statusTimer) {
-    clearInterval(statusTimer)
-    statusTimer = null
-  }
   if (dotsTimer) {
     clearInterval(dotsTimer)
     dotsTimer = null
@@ -99,7 +79,7 @@ onUnmounted(() => {
 <template>
   <div
     class="collapsed-bar"
-    :class="`status-${mascotStatus}`"
+    :class="`status-${store.mascotStatus}`"
     @click="handleClick"
   >
     <!-- 左侧：Canvas 小章鱼 -->

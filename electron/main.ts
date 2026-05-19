@@ -99,9 +99,9 @@ function startMockDataService(mainWindow: Electron.BrowserWindow): void {
     },
     {
       id: 'session-4',
-      projectName: 'api',
+      projectName: 'api-server',
       sessionNumber: undefined,
-      agentType: 'codex' as const,
+      agentType: 'claude' as const,
       terminalType: 'ghostty' as const,
       status: 'thinking' as const,
       lastOutput: [
@@ -113,9 +113,9 @@ function startMockDataService(mainWindow: Electron.BrowserWindow): void {
     },
     {
       id: 'session-5',
-      projectName: 'web',
+      projectName: 'web-dashboard',
       sessionNumber: undefined,
-      agentType: 'gemini' as const,
+      agentType: 'claude' as const,
       terminalType: 'iterm2' as const,
       status: 'sleeping' as const,
       lastOutput: [],
@@ -143,7 +143,7 @@ function startMockDataService(mainWindow: Electron.BrowserWindow): void {
       id: 'session-7',
       projectName: 'dashboard',
       sessionNumber: undefined,
-      agentType: 'codex' as const,
+      agentType: 'claude' as const,
       terminalType: 'ghostty' as const,
       status: 'sleeping' as const,
       lastOutput: [
@@ -155,9 +155,9 @@ function startMockDataService(mainWindow: Electron.BrowserWindow): void {
     // thinking 状态
     {
       id: 'session-8',
-      projectName: 'docs',
+      projectName: 'docs-site',
       sessionNumber: undefined,
-      agentType: 'gemini' as const,
+      agentType: 'claude' as const,
       terminalType: 'iterm2' as const,
       status: 'thinking' as const,
       lastOutput: [

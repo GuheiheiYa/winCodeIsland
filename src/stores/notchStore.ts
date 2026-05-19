@@ -21,6 +21,34 @@ export const useNotchStore = defineStore('notch', () => {
   })
   const isSettingsOpen = ref(false)
 
+  /** 吉祥物状态（全局轮训，供 CollapsedBar 和 TopBar 共享） */
+  const mascotStatus = ref<'idle' | 'processing' | 'waitingApproval'>('idle')
+  let mascotTimer: ReturnType<typeof setInterval> | null = null
+  const STATUS_CYCLE: Array<'idle' | 'processing' | 'waitingApproval'> = [
+    'idle',
+    'processing',
+    'waitingApproval',
+  ]
+
+  /** 启动吉祥物状态轮训（应用级，只应调用一次） */
+  function startMascotCycle(): void {
+    if (mascotTimer) return
+    let idx = 0
+    mascotStatus.value = STATUS_CYCLE[0]
+    mascotTimer = setInterval(() => {
+      idx = (idx + 1) % STATUS_CYCLE.length
+      mascotStatus.value = STATUS_CYCLE[idx]
+    }, 3000)
+  }
+
+  /** 停止吉祥物状态轮训 */
+  function stopMascotCycle(): void {
+    if (mascotTimer) {
+      clearInterval(mascotTimer)
+      mascotTimer = null
+    }
+  }
+
   // ==================== Getters ====================
 
   /** 总会话数 */
@@ -150,6 +178,7 @@ export const useNotchStore = defineStore('notch', () => {
     dockPosition,
     settings,
     isSettingsOpen,
+    mascotStatus,
     // Getters
     sessionCount,
     workingCount,
@@ -166,6 +195,8 @@ export const useNotchStore = defineStore('notch', () => {
     dockToEdge,
     openSettings,
     closeSettings,
-    updateSettings
+    updateSettings,
+    startMascotCycle,
+    stopMascotCycle
   }
 })

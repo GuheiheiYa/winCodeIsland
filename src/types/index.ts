@@ -105,6 +105,7 @@ export interface ElectronAPI {
   getSettings: () => Promise<AppSettings>
   setSettings: (settings: AppSettings) => void
   onExpandChanged: (callback: (expanded: boolean) => void) => () => void
+  setIgnoreMouseEvents: (ignore: boolean) => void
   platform: string
 }
 

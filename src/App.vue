@@ -10,7 +10,6 @@ import { startMockUpdates, generateInitialSessions } from './services/mockSessio
 import type { Session } from './types'
 import CollapsedBar from './components/CollapsedBar.vue'
 import ExpandedPanel from './components/ExpandedPanel.vue'
-import SettingsPanel from './components/SettingsPanel.vue'
 
 const store = useNotchStore()
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -61,24 +60,40 @@ function initializeApp(): void {
     store.setExpanded(expanded)
   })
 
-  // ========== 3. 如果在 Electron 环境中，获取设置 ==========
-  if (window.electronAPI) {
-    window.electronAPI.getSettings().then((settings) => {
-      if (settings) {
-        store.updateSettings(settings)
-      }
-    }).catch(() => {
-      // 忽略设置获取错误
-    })
-  }
+  // ========== 2.5 启动吉祥物状态轮训（CollapsedBar + TopBar 共享）==========
+  store.startMascotCycle()
 
-  // ========== 4. 如果在浏览器环境（开发），启动定时更新（thinking 光标闪烁等）==========
+  // ========== 3. 如果在浏览器环境（开发），启动定时更新（thinking 光标闪烁等）==========
   if (!window.electronAPI) {
     cleanupMock = startMockUpdates((sessions: Session[]) => {
       store.updateSessions(sessions)
     }, 600)
   }
 }
+
+/**
+ * 鼠标穿透控制：透明区域点击穿透到下方窗口
+ * Windows 下通过 setIgnoreMouseEvents 动态切换
+ */
+function setupMouseIgnore(): void {
+  if (!window.electronAPI || window.electronAPI.platform !== 'win32') return
+
+  const handleMouseMove = (e: MouseEvent): void => {
+    const el = document.elementFromPoint(e.clientX, e.clientY)
+    const isOverContent = !!el?.closest('.collapsed-bar, .expanded-panel')
+    // 在内容区域时接收鼠标事件，在透明区域时穿透
+    window.electronAPI?.setIgnoreMouseEvents?.(!isOverContent)
+  }
+
+  document.addEventListener('mousemove', handleMouseMove)
+
+  // 返回清理函数
+  return () => {
+    document.removeEventListener('mousemove', handleMouseMove)
+  }
+}
+
+let cleanupMouseIgnore: (() => void) | undefined
 
 onMounted(() => {
   // 延迟初始化，确保所有组件就绪
@@ -88,13 +103,18 @@ onMounted(() => {
 
   // 监听全局点击事件（用于点击外部收起）
   document.addEventListener('mousedown', handleClickOutside)
+
+  // 设置鼠标穿透（仅 Windows）
+  cleanupMouseIgnore = setupMouseIgnore()
 })
 
 onUnmounted(() => {
   unsubSessions?.()
   unsubExpand?.()
   cleanupMock?.()
+  store.stopMascotCycle()
   document.removeEventListener('mousedown', handleClickOutside)
+  cleanupMouseIgnore?.()
 })
 </script>
 
@@ -119,10 +139,6 @@ onUnmounted(() => {
       @collapse="handleToggleExpand"
     />
 
-    <!-- 设置面板（模态框） -->
-    <Transition name="settings">
-      <SettingsPanel v-if="store.isSettingsOpen" />
-    </Transition>
   </div>
 </template>
 

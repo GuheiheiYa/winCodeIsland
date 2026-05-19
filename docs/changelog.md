@@ -1,5 +1,23 @@
 # 更新文档
 
+## [v1.0.1] - 2026-05-19
+
+### 变更
+
+- **TopBar 吉祥物 Logo** - 左侧静态 SVG 图标替换为 Canvas 像素章鱼吉祥物（28x24px），与 CollapsedBar 共享同一 `mascotStatus` 状态，三种场景同步轮训切换
+- **吉祥物状态全局化** - 将 `mascotStatus` 及轮训逻辑从 `CollapsedBar.vue` 提取至 `notchStore`，新增 `startMascotCycle()` / `stopMascotCycle()`，收起/展开状态均同步显示
+- **背景色加深** - `--bg-panel`、`--bg-primary`、`--bg-secondary` 统一加深为 `rgba(10, 10, 18, 0.98)` / `#080810`，减少透明感
+- **设置功能移除** - 暂时隐藏 `SettingsPanel` 组件渲染，移除 TopBar 设置按钮及相关 IPC 调用
+- **展开面板高度调整** - 从 680px 改为 **340px 固定高度**，内容在面板内部滚动，消除下方透明死区
+- **SessionCard 章鱼手臂动画** - working 状态图标新增 CSS keyframes 打字手臂旋转动画（左右臂交替 0.15s / 0.12s）
+- **TopBar Logo 放大** - 品牌图标从 16x16px 放大至 **32x32px**
+
+### 修复
+
+- 修复 `settings:get` IPC 调用无处理器导致的运行时错误
+
+---
+
 ## [v1.0.0] - 2025-05-19
 
 ### 新增

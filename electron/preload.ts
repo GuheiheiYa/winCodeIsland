@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('window:expand-changed', handler)
   },
 
+  // 鼠标穿透（透明区域点击穿透到下方窗口）
+  setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.send('window:set-mouse-ignore', ignore),
+
   // 平台信息
   platform: process.platform
 })

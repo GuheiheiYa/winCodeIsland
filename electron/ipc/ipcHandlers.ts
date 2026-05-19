@@ -74,6 +74,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       notchWindow.close()
     }
   })
+
+  // 鼠标穿透控制（透明区域穿透到下方窗口）
+  ipcMain.on('window:set-mouse-ignore', (_event, ignore: boolean) => {
+    const notchWindow = BrowserWindow.fromId(mainWindow.id)
+    if (notchWindow && process.platform === 'win32') {
+      notchWindow.setIgnoreMouseEvents(ignore, { forward: true })
+    }
+  })
 }
 
 /**

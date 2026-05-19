@@ -50,9 +50,9 @@ function getLinePrefix(line: OutputLine): string {
 
 <template>
   <div class="terminal-output">
-    <!-- 输出行列表 -->
+    <!-- 输出行列表（最多展示3行） -->
     <div
-      v-for="(line, index) in lines"
+      v-for="(line, index) in lines.slice(0, 3)"
       :key="index"
       class="output-line"
       :class="getLineClass(line)"
