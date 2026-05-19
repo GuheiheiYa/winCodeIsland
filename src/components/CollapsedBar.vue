@@ -11,6 +11,7 @@ import { CanvasRenderer } from '../renderer/canvas/canvas-renderer'
 const store = useNotchStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let renderer: CanvasRenderer | null = null
+let dotsTimer: ReturnType<typeof setInterval> | null = null
 
 const emit = defineEmits<{
   expand: []
@@ -41,6 +42,10 @@ const statusMeta = computed(() => {
   }
 })
 
+/** 动态省略号 */
+const dots = ref('')
+const DOTS_CYCLE = ['', '.', '..', '...']
+
 function handleClick(): void {
   emit('expand')
 }
@@ -61,11 +66,22 @@ onMounted(() => {
   renderer = new CanvasRenderer(canvas)
   renderer.setSpeed(1.2)
   renderer.startLoop(() => mascotStatus.value)
+
+  // 省略号动画: '' → '.' → '..' → '...' 循环
+  let idx = 0
+  dotsTimer = setInterval(() => {
+    idx = (idx + 1) % DOTS_CYCLE.length
+    dots.value = DOTS_CYCLE[idx]
+  }, 450)
 })
 
 onUnmounted(() => {
   renderer?.stopLoop()
   renderer = null
+  if (dotsTimer) {
+    clearInterval(dotsTimer)
+    dotsTimer = null
+  }
 })
 </script>
 
@@ -85,7 +101,7 @@ onUnmounted(() => {
           textShadow: `0 0 6px ${statusMeta.glow}`,
         }"
       >
-        {{ statusMeta.text }}
+        {{ statusMeta.text }}{{ dots }}
       </span>
     </div>
 
