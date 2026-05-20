@@ -18,7 +18,7 @@ export class TrayManager {
     // 使用内联方式创建托盘图标（1x1 透明 PNG 作为 fallback，
     // 实际项目中应提供真实图标文件）
     const iconPath = join(__dirname, '../../resources/tray-icon.png')
-    let trayIcon: nativeImage
+    let trayIcon: ReturnType<typeof nativeImage.createEmpty>
 
     try {
       trayIcon = nativeImage.createFromPath(iconPath)
@@ -60,7 +60,7 @@ export class TrayManager {
   /**
    * 创建默认图标（程序生成）
    */
-  private createDefaultIcon(): nativeImage {
+  private createDefaultIcon(): ReturnType<typeof nativeImage.createEmpty> {
     // 使用 Buffer 创建一个简单的 PNG 图标
     // 这是一个 16x16 的深色圆角方块 PNG
     const pngData = Buffer.from([

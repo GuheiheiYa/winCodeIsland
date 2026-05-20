@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createSession: (projectName: string, cwd: string) => ipcRenderer.invoke('session:create', projectName, cwd),
   killSession: (id: string) => ipcRenderer.send('session:kill', id),
 
+  // 终端聚焦
+  focusTerminal: (pid: number) => ipcRenderer.send('terminal:focus', pid),
+
   // 平台信息
   platform: process.platform
 })

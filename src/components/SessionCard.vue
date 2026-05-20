@@ -12,6 +12,10 @@ const props = defineProps<{
   session: Session
 }>()
 
+const emit = defineEmits<{
+  click: [session: Session]
+}>()
+
 /** 根据会话状态返回像素章鱼图标类型 */
 const statusIcon = computed(() => {
   switch (props.session.status) {
@@ -41,7 +45,7 @@ const lastLine = computed(() => {
 </script>
 
 <template>
-  <div class="session-card" :class="`status-${session.status}`">
+  <div class="session-card" :class="`status-${session.status}`" @click="emit('click', session)">
     <!-- 左列：动态章鱼图标 -->
     <div class="card-left">
       <div class="pixel-icon" :class="statusIcon">
@@ -169,6 +173,7 @@ const lastLine = computed(() => {
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
   animation: fadeInUp 0.25s ease backwards;
+  cursor: pointer;
 }
 
 .session-card:hover {

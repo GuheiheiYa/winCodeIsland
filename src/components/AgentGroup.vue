@@ -5,11 +5,15 @@
  * 参考设计：img_1.png 中的 Claude (3)、Codex (1)、Gemini (1) 分组
  */
 import { computed } from 'vue'
-import type { AgentGroupData } from '../types'
+import type { AgentGroupData, Session } from '../types'
 import SessionCard from './SessionCard.vue'
 
 const props = defineProps<{
   group: AgentGroupData
+}>()
+
+const emit = defineEmits<{
+  'session-click': [session: Session]
 }>()
 
 /** 助手图标颜色配置 */
@@ -53,6 +57,7 @@ const displayAgentName = computed(() => agentNameMap[props.group.agentType] || p
         :key="session.id"
         :session="session"
         :style="{ animationDelay: `${index * 0.04}s` }"
+        @click="emit('session-click', $event)"
       />
     </div>
   </div>

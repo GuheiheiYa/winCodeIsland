@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { ClaudeLogMonitor } from './claudeLogMonitor'
-import { updateSessions } from '../ipc/ipcHandlers'
+import { primeTerminalFocusCache, updateSessions } from '../ipc/ipcHandlers'
 
 /**
  * Claude 会话管理器
@@ -64,6 +64,7 @@ export class SessionManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     const sessions = this.getAllSessions()
+    primeTerminalFocusCache(sessions)
     updateSessions(this.mainWindow, sessions)
   }
 }

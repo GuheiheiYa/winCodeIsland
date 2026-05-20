@@ -6,8 +6,9 @@
 
 - **终端窗口聚焦** - 点击展开面板中的会话卡片，自动聚焦到对应的终端窗口
   - `ExpandedPanel` 捕获 `session-click` 事件，调用 `window.electronAPI.focusTerminal(pid)`
-  - `ipcHandlers.ts` 新增 `terminal:focus` IPC 处理器，通过 PID 查找并激活终端进程
-  - 支持 Windows Terminal（通过 `wt focus-tab` 切换标签页）和传统 CMD/PowerShell（通过 Win32 API 激活窗口）
+  - `ipcHandlers.ts` 新增 `terminal:focus` IPC 处理器，通过 PID 查找并激活终端窗口
+  - `SessionManager` 后台预热终端聚焦缓存，点击卡片时优先复用 `pid → hwnd/tabIndex` 解析结果
+  - 支持 Windows Terminal（通过目标 PID 所属窗口 + `wt focus-tab` 切换标签页）和传统 CMD/PowerShell（通过 Win32 API 激活窗口）
   - 使用 `AttachThreadInput` 绕过 Windows 前台权限限制，800ms 后恢复 Electron 窗口置顶
 - **扩展终端类型支持** - `TerminalType` 新增 `cmd`、`powershell`、`wt`（Windows Terminal）
   - `ClaudeLogMonitor` 根据 `process.platform` 自动判断终端类型（Windows → `cmd`，其他 → `ghostty`）
@@ -17,9 +18,18 @@
 ### 修复
 
 - **修复 `ipcHandlers.ts` TypeScript 报错** - 将 `require('child_process')`、`require('fs')`、`require('path')`、`require('os')` 改为 ESModule `import` 语法，兼容 `tsconfig.node.json` 的 `module: "ESNext"` 配置
+- **修复终端聚焦延迟与多窗口误定位** - 终端目标解析从点击时同步探测改为后台缓存，并按目标 PID 的 Windows Terminal 祖先窗口计算 tab 索引，不再默认使用第一个 Windows Terminal 窗口
+- **修复 PowerShell resolver 变量冲突** - 避免使用 `$pid` / `$Pid` 这类会撞上 PowerShell 内置只读 `$PID` 的变量名
+- **修复 sleeping 输出解析中的重复 `case`** - `assistant/message` 的嵌套 `tool_use` 检查合并到同一个分支，消除永远不可达的重复 case
+- **修复主进程类型检查问题** - 补全 Claude `waiting` 状态类型，修正托盘图标类型，并将 `visibleOnAllWorkspaces` 从构造参数改为窗口创建后的 API 调用
 - **修复 `tsconfig` 项目引用冲突** - 移除 `tsconfig.json` → `tsconfig.node.json` 的 `references`，解除 `src/types/index.ts` 被两个项目同时包含导致的类型检查冲突
   - `tsconfig.node.json` 直接包含 `"src/types/**/*.ts"`，并移除 `"composite": true`
 - **修复 `waiting...` 颜色错误** - `TerminalOutput` 无输出时的默认提示，`waitingApproval` 状态从绿色改为橙色（`#fb923c`），`responding` 状态改为蓝色（`#60a5fa`），与 `SessionCard` 终端标签颜色体系一致
+- **修复终端聚焦事件链断链** - `preload.ts` 补充暴露 `focusTerminal` 方法，`SessionCard` 添加 `@click` 事件发射，`AgentGroup` 透传 `session-click` 事件至 `ExpandedPanel`
+- **修复最小化窗口无法弹出** - `ShowWindow(SW_RESTORE)` 后增加 150ms 延迟，等待 Windows 完成窗口恢复动画后再执行 `SetForegroundWindow`
+- **修复 WT 标签页切换定位失败** - `wt` 命令增加 `-w 0` 窗口目标参数（指定当前 WT 窗口而非新建），并将 `focus-tab` 执行延迟 400ms（等待窗口完成焦点转移）
+- **修复 WT 标签索引计算错误** - PowerShell 中 `$activeOcs` 过滤条件从"有子进程"改为"父进程是 WindowsTerminal"，排除系统其他终端的 conhost 干扰
+- **优化终端聚焦速度** - 新增 30 秒 TTL 缓存（`Map<pid → {hwnd, tabIndex, termType}``），同一会话二次点击跳过 PowerShell 冷启动；清理 PowerShell 脚本中 10+ 处调试输出减少 I/O 开销
 
 ## [v1.0.5] - 2026-05-19
 

@@ -327,7 +327,15 @@ export class ClaudeLogMonitor {
       }
       case 'message':
       case 'assistant': {
-        const text = extractTextContent(evt.message?.content)
+        const content = evt.message?.content
+        if (Array.isArray(content)) {
+          for (const item of content) {
+            if (item?.type === 'tool_use') {
+              return { type: 'command', content: `[Tool] ${item.name ?? 'unknown'}` }
+            }
+          }
+        }
+        const text = extractTextContent(content)
         if (text) return { type: 'output', content: truncate(text, 120) }
         return null
       }
@@ -338,19 +346,6 @@ export class ClaudeLogMonitor {
         return null
       case 'tool_use':
         return { type: 'command', content: `[Tool] ${evt.name ?? 'unknown'}` }
-      case 'message':
-      case 'assistant': {
-        // 检查嵌套的 tool_use
-        const content = evt.message?.content
-        if (Array.isArray(content)) {
-          for (const item of content) {
-            if (item?.type === 'tool_use') {
-              return { type: 'command', content: `[Tool] ${item.name ?? 'unknown'}` }
-            }
-          }
-        }
-        break
-      }
       case 'tool_result': {
         const text = evt.content ? truncate(String(evt.content), 120) : null
         if (text) return { type: 'output', content: text }
@@ -429,7 +424,7 @@ interface SessionState {
   sessionId: string
   cwd: string
   startedAt: number
-  status: 'busy' | 'idle'
+  status: 'busy' | 'idle' | 'waiting'
   updatedAt: number
   kind: string
   entrypoint: string

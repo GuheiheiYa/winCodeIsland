@@ -33,7 +33,6 @@ export class NotchWindowManager {
       y: 0, // 紧贴屏幕顶部
       frame: false,
       alwaysOnTop: true,
-      visibleOnAllWorkspaces: true,
       skipTaskbar: true,
       resizable: false,
       maximizable: false,
@@ -56,6 +55,7 @@ export class NotchWindowManager {
 
     // 设置窗口层级（Windows 置顶）
     this.window.setAlwaysOnTop(true, 'screen-saver')
+    this.window.setVisibleOnAllWorkspaces(true)
 
     // 默认穿透透明区域（Windows），由渲染进程动态控制内容区域是否接收事件
     if (process.platform === 'win32') {

@@ -3,6 +3,7 @@ out/
 dist/
 .idea/
 .claude/
+.agents/
 *.log
 .DS_Store
 *.local

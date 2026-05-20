@@ -250,7 +250,24 @@ interface AppState {
 | `settings:get/set` | R ↔ M | 获取/保存设置 |
 | `settings:changed` | M → R | 设置变更通知 |
 | `app:quit` | R → M | 退出应用 |
-| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口（Win32 API + PowerShell）|
+| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口（后台缓存 + Win32 API + Windows Terminal tab 切换）|
+
+**终端聚焦实现**:
+
+**渲染进程事件链**：
+- `SessionCard` 根元素监听 `@click`，`$emit('click', session)` 将事件向上传递
+- `AgentGroup` 透传 `@click` → `$emit('session-click', $event)` 至 `ExpandedPanel`
+- `ExpandedPanel.handleSessionClick(session)` 调用 `window.electronAPI.focusTerminal(pid)`
+- `preload.ts` 暴露 `focusTerminal: (pid) => ipcRenderer.send('terminal:focus', pid)`
+
+**主进程激活流程**：
+- `SessionManager` 每次扫描会话后调用 `primeTerminalFocusCache()`，后台预解析 `pid → { hwnd, tabIndex, termType }`，点击卡片时优先使用缓存（30 秒 TTL），避免把慢速进程树查询放在交互路径上。
+- Windows Terminal 通过目标 PID 的进程祖先链定位其所属的 `WindowsTerminal.exe` 窗口，再在该窗口的 `OpenConsole/conhost` 子进程中计算 tab 索引（仅保留父进程为 `WindowsTerminal` 的 `OpenConsole/conhost`，排除系统其他终端干扰）。
+- 传统 CMD/PowerShell 先查找可见窗口句柄（`EnumWindows` + `GetWindowThreadProcessId`），必要时通过 `AttachConsole + GetConsoleWindow` 获取控制台窗口句柄。
+- **窗口恢复**：最小化窗口先 `ShowWindow(SW_RESTORE)`，等待 150ms 让 Windows 完成恢复动画后再执行 `SetForegroundWindow`，否则焦点请求会被系统忽略。
+- **WT 标签切换**：`SetForegroundWindow` 成功后延迟 400ms 执行 `wt -w 0 focus-tab --tab <index>`，确保 WT 窗口已完成焦点转移后再接收 tab 切换命令。
+- 使用 `AttachThreadInput` 附加当前线程到前景窗口输入队列，绕过 Windows 前台权限限制，激活目标后分离线程。
+- 激活完成后 800ms 恢复 Electron 窗口 `alwaysOnTop: 'screen-saver'` 置顶。
 
 ## 7. 窗口系统
 
