@@ -105,7 +105,7 @@ const statusLabel = computed(() => {
     </div>
 
     <!-- 如果没有任何输出行，根据状态显示默认提示 -->
-    <div v-if="lines.length === 0" class="output-line line-default">
+    <div v-if="lines.length === 0" class="output-line line-default" :class="`status-${status}`">
       <span class="default-text">{{ statusLabel }}</span>
     </div>
   </div>
@@ -229,6 +229,14 @@ const statusLabel = computed(() => {
 /* ===== 默认状态提示（无内容时） ===== */
 .line-default {
   color: #4ade80;
+}
+
+.line-default.status-waitingApproval {
+  color: #fb923c;
+}
+
+.line-default.status-responding {
+  color: #60a5fa;
 }
 
 .default-text {

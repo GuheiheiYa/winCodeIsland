@@ -78,9 +78,10 @@ export class ClaudeLogMonitor {
     return {
       id: state.sessionId,
       projectName,
-      sessionNumber: undefined,
+      sessionNumber: `#${state.pid}`,
+      pid: state.pid,
       agentType: 'claude',
-      terminalType: 'iterm2',
+      terminalType: process.platform === 'win32' ? 'cmd' : 'ghostty',
       status,
       lastOutput,
       timestamp: state.updatedAt,

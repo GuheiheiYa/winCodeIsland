@@ -203,8 +203,9 @@ interface Session {
   id: string              // 唯一标识
   projectName: string      // 项目名称
   sessionNumber?: string   // 编号（如 #8387）
+  pid?: number             // 进程 ID（用于终端窗口聚焦）
   agentType: 'claude' | 'codex' | 'gemini'
-  terminalType: 'ghostty' | 'iterm2'
+  terminalType: 'ghostty' | 'iterm2' | 'cmd' | 'powershell' | 'wt'
   status: 'thinking' | 'tool_use' | 'responding' | 'working' | 'waitingApproval' | 'sleeping'
   lastOutput: OutputLine[] // 最近终端输出
   timestamp: number        // 时间戳
@@ -249,6 +250,7 @@ interface AppState {
 | `settings:get/set` | R ↔ M | 获取/保存设置 |
 | `settings:changed` | M → R | 设置变更通知 |
 | `app:quit` | R → M | 退出应用 |
+| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口（Win32 API + PowerShell）|
 
 ## 7. 窗口系统
 

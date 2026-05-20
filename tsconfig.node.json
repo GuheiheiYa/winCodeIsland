@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "composite": true,
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -14,5 +13,5 @@
     },
     "types": ["electron-vite/node"]
   },
-  "include": ["electron/**/*.ts", "*.config.ts"]
+  "include": ["electron/**/*.ts", "src/types/**/*.ts", "*.config.ts"]
 }

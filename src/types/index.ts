@@ -20,7 +20,7 @@ export type AgentType = 'claude' | 'codex' | 'gemini'
 /**
  * 终端类型
  */
-export type TerminalType = 'ghostty' | 'iterm2'
+export type TerminalType = 'ghostty' | 'iterm2' | 'cmd' | 'powershell' | 'wt'
 
 /**
  * 单个会话
@@ -29,6 +29,7 @@ export interface Session {
   id: string
   projectName: string
   sessionNumber?: string
+  pid?: number
   agentType: AgentType
   terminalType: TerminalType
   status: SessionStatus
@@ -107,6 +108,7 @@ export interface ElectronAPI {
   setSettings: (settings: AppSettings) => void
   onExpandChanged: (callback: (expanded: boolean) => void) => () => void
   setIgnoreMouseEvents: (ignore: boolean) => void
+  focusTerminal: (pid: number) => void
   createSession: (projectName: string, cwd: string) => Promise<string>
   killSession: (id: string) => void
   platform: string

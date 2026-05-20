@@ -5,6 +5,7 @@
  * 参考设计：img_1.png
  */
 import { useNotchStore } from '../stores/notchStore'
+import type { Session } from '../types'
 import TopBar from './TopBar.vue'
 import AgentGroup from './AgentGroup.vue'
 
@@ -13,6 +14,15 @@ const emit = defineEmits<{
 }>()
 
 const store = useNotchStore()
+
+function handleSessionClick(session: Session) {
+  console.log('[ExpandedPanel] session clicked, pid=', session.pid, 'name=', session.projectName)
+  if (session.pid) {
+    window.electronAPI.focusTerminal(session.pid)
+  } else {
+    console.warn('[ExpandedPanel] session has no pid, cannot focus terminal:', session.projectName, session.id)
+  }
+}
 </script>
 
 <template>
@@ -29,7 +39,7 @@ const store = useNotchStore()
         class="agent-section"
         :style="{ animationDelay: `${index * 0.05}s` }"
       >
-        <AgentGroup :group="group" />
+        <AgentGroup :group="group" @session-click="handleSessionClick" />
       </div>
 
       <!-- 无会话提示 -->
