@@ -111,14 +111,15 @@ interface Session {
 - 拖拽结束时贴边吸附（40px 阈值）。
 - 收起（300x36）与展开（560x370，固定高度内容滚动）状态间的边界动画。
 
-### IPC 事件（摘要）
+### IPC 通信
 
-| 方向 | 关键通道 |
-|------|---------|
-| 渲染进程 → 主进程 | `window:toggle-expand`、`window:set-expanded`、`window:dock`、`settings:set`、`app:quit` |
-| 主进程 → 渲染进程 | `window:expand-changed`、`sessions:update`、`settings:changed` |
+渲染进程通过预加载脚本暴露的 `window.electronAPI` 与主进程通信，不直接访问 `ipcRenderer`。
 
-预加载脚本（`electron/preload.ts`）暴露类型化的 `window.electronAPI`，渲染进程代码使用它而非原始 `ipcRenderer`。
+关键通道：
+- **渲染进程 → 主进程**：窗口控制（toggle-expand, set-expanded, dock）、设置保存、退出
+- **主进程 → 渲染进程**：展开状态变更通知、会话数据推送、设置变更广播
+
+完整通道列表见 [`features.md`](docs/features.md) §6。
 
 ---
 
@@ -164,9 +165,11 @@ public/            # 静态资源
 
 docs/              # 项目文档（必须维护）
   requirements.md  # 需求文档
-  features.md      # 功能文档
+  features.md      # 功能文档（模块设计、状态映射、数据模型、样式系统）
   changelog.md     # 更新日志
-  expanded-panel-roadmap.md  # 展开面板功能拆解
+  expanded-panel.md      # 展开面板设计（组件接口、视觉规范、性能指标）
+  claude-session-format.md  # Claude Code 日志格式规范
+  roadmap.md       # 开发路线图（待开发功能汇总）
 ```
 
 ### 命名约定
@@ -209,7 +212,8 @@ docs/              # 项目文档（必须维护）
 | 文档 | 最后更新 | 说明 |
 |------|---------|------|
 | `requirements.md` | v1.0.4 | FR-1 ~ FR-7 需求定义，含 6 状态 + 370px 展开高度 |
-| `features.md` | v1.0.5 | 新增音效系统模块说明 |
-| `changelog.md` | v1.0.5 | 2026-05-19 发布，v1.0.5 音效系统 |
+| `features.md` | v1.0.5 | 功能模块设计、Canvas/音效/会话监控/样式系统 |
+| `changelog.md` | v1.0.5 | 版本发布记录（仅已发布版本，无开发计划） |
 | `claude-session-format.md` | v1.0.4 | Claude Code 日志格式规范（sessions.json + jsonl 事件类型） |
-| `expanded-panel-roadmap.md` | v1.0.0 | 展开面板功能拆解、待开发项、版本规划 |
+| `expanded-panel.md` | v1.0.5 | 展开面板组件接口、视觉规范、性能指标 |
+| `roadmap.md` | v1.0.5 | 版本历史 + P1~P3 待开发功能汇总 |

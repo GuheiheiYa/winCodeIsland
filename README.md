@@ -102,35 +102,9 @@ winCodeIsland/
     └── expanded-panel-roadmap.md # 展开面板功能路线图
 ```
 
-## 每个文件做什么
+## 文件导航
 
-### 主进程（electron/）
-
-| 文件 | 职责 |
-|------|------|
-| `main.ts` | 应用启动入口。创建窗口、托盘、注册 IPC、启动 SessionManager |
-| `preload.ts` | 通过 `contextBridge` 安全暴露 `window.electronAPI`，渲染进程不直接访问 Node API |
-| `windows/notchWindow.ts` | 窗口管理：无边框/置顶/透明/跳过任务栏。处理收起(300x36)↔展开(560x370)切换、拖拽移动、贴边吸附(40px阈值) |
-| `tray/trayManager.ts` | 系统托盘：图标 + 右键菜单（显示/隐藏/开机启动/退出） |
-| `ipc/ipcHandlers.ts` | IPC 处理器：窗口控制、设置读写、鼠标穿透切换 |
-| `services/sessionManager.ts` | 定时（1.5s）调用 `ClaudeLogMonitor.scanSessions()`，通过 IPC 推送 `Session[]` 到渲染进程 |
-| `services/claudeLogMonitor.ts` | 读取 Claude Code 本地日志，解析为 `Session[]`。支持嵌套 tool_use 检测 |
-
-### 渲染进程（src/）
-
-| 文件 | 职责 |
-|------|------|
-| `App.vue` | 根组件。条件渲染 CollapsedBar（收起）或 ExpandedPanel（展开）。设置 IPC 监听 |
-| `stores/notchStore.ts` | 全局状态：`sessions`、`isExpanded`、`activeTab`、`mascotStatus`（计算属性）、`groupedByAgent`、`filteredSessions` |
-| `components/CollapsedBar.vue` | Pill 小条。左侧 Canvas 章鱼吉祥物，右侧会话数。状态文字/颜色/发光与 `mascotStatus` 联动 |
-| `components/ExpandedPanel.vue` | 展开面板。固定高度 370px，内部滚动。包含 TopBar + AgentGroup 列表 |
-| `components/TopBar.vue` | 顶部栏。Canvas 吉祥物(28x24) + ALL/STA/CLI 标签 + 关闭按钮 |
-| `components/AgentGroup.vue` | 助手分组。按 Claude → Codex → Gemini 顺序渲染，空组隐藏 |
-| `components/SessionCard.vue` | 会话卡片。左：SVG 像素章鱼（sleeping/working/thinking 三种）。中：项目名 + TerminalOutput。右：时间 + 终端类型标签 |
-| `components/TerminalOutput.vue` | 输出行渲染。sleeping 状态展示最后一行历史输出；活跃状态展示默认状态提示（working.../thinking... 等绿色脉冲文字） |
-| `renderer/canvas/canvas-renderer.ts` | Canvas 引擎。rAF 循环，根据 `getStatus()` 回调路由到 sleep/work/alert 三种场景渲染 |
-| `renderer/canvas/sprites.ts` | 精灵定义：`CLAWD_COLORS` 调色板、视口映射、手臂旋转路径计算 |
-| `renderer/canvas/animations.ts` | 动画系统：弹簧物理 `springValue`、关键帧插值 `lerpKeyframes`、告警场景关键帧数据 |
+各目录下关键文件的一句话职责见项目根目录的 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 数据流
 

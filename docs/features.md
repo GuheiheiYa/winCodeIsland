@@ -55,94 +55,18 @@
 | processing | 运行中 | #4ade80（绿） | 弹跳打字 |
 | waitingApproval | 请确认 | #f87171（红） | 跳跃告警 |
 
-### 2.2 ExpandedPanel - 展开面板
+### 2.2 展开面板组件群
 
-**文件**: `src/components/ExpandedPanel.vue`
+展开面板相关组件的**详细接口定义、视觉规范、性能指标**见 [`expanded-panel.md`](expanded-panel.md)。
 
-**职责**: 点击 Pill 小条后展开，展示完整的会话列表和详情。
-
-**关键实现**:
-- 尺寸 560px 宽，固定高度 **370px**（内容在面板内部滚动），带自定义滚动条
-- 底部圆角 24px，无边框顶部，micro-curve 弧线过渡
-- 按助手分组（Claude / Codex / Gemini）交错淡入动画
-- 空状态友好提示
-
-### 2.3 TopBar - 顶部栏
-
-**文件**: `src/components/TopBar.vue`
-
-**职责**: 展开面板的顶部控制区。
-
-**功能**:
-- 左侧 Canvas 像素章鱼吉祥物（28x24 CSS 像素，与 CollapsedBar 共享状态）
-- ALL / STA / CLI 标签切换（过滤会话状态）
-- 音量按钮（预留声音提示接口）
-- 关闭按钮（红色电源图标，收起面板）
-
-> 设置功能当前版本已移除（设置面板组件保留但不再渲染）。
-
-### 2.4 SessionCard - 会话卡片
-
-**文件**: `src/components/SessionCard.vue`
-
-**职责**: 单个会话的信息展示单元。
-
-**展示内容**:
-- 像素风项目图标（城堡/骷髅/星星等）
-- 项目名称 + 会话编号
-- 时间标签（1h、<1m、1m）
-- 终端类型（Ghostty/iTerm2 + 彩色圆点）
-- 最近终端输出（sleeping 状态展示最后一行历史输出；活跃状态统一展示状态提示文字）
-- 状态指示：sleeping（zzz图标）、thinking（光标闪烁+绿色）、tool_use（绿色圆点）、responding（蓝色圆点）、working（绿色圆点）、waitingApproval（橙色感叹号）
-
-### 2.4.1 TerminalOutput - 终端输出渲染
-
-**文件**: `src/components/TerminalOutput.vue`
-
-**职责**: 渲染会话的最近终端输出。活跃状态统一展示简洁的状态提示，sleeping 状态展示最后一行历史输出。
-
-**渲染策略**:
-
-| 行类型 | 渲染方式 | 说明 |
-|--------|---------|------|
-| `command` | 纯文本 | `$ ` 前缀，灰色 |
-| `prompt` | 纯文本 | `$ ` 前缀，白色 |
-| `output` | 纯文本 | 绿色前缀 `> ` |
-| `thinking` | 纯文本 + 光标 | 灰色文字 + 闪烁光标 |
-| `link` | 链接 | 蓝色可点击链接 |
-
-**活跃状态展示**: 所有活跃状态（thinking / tool_use / responding / working / waitingApproval）统一返回空数组，由 TerminalOutput 展示对应的状态提示文字（`thinking...` / `using tool...` / `responding...` / `working...` / `waiting...`），带绿色脉冲动画。
-
-**sleeping 状态展示**: 展示 JSONL 日志中最后一行有意义的输出（user prompt / assistant text / tool_result 等）。
-
-**尺寸**: `max-height: 24px`，`overflow: hidden`，活跃状态严格只展示 1 行。
-
-### 2.5 AgentGroup - 助手分组
-
-**文件**: `src/components/AgentGroup.vue`
-
-**职责**: 按 AI 助手类型聚合会话卡片。
-
-**分组规则**:
-- Claude（橙色太阳图标）
-- Codex（紫色图标）
-- Gemini（紫色钻石图标）
-- 按固定顺序渲染，空组自动隐藏
-
-### 2.6 SettingsPanel - 设置面板（暂不启用）
-
-**文件**: `src/components/SettingsPanel.vue`
-
-**职责**: 模态框形式的应用设置（组件保留但当前版本不再渲染）。
-
-**配置项**（预留）：
-| 配置项 | 类型 | 默认值 |
-|--------|------|--------|
-| 开机自启 | boolean | false |
-| 贴边吸附 | boolean | true |
-| 主题 | 'dark' \| 'light' \| 'auto' | 'dark' |
-| 快捷键 | string | 'Ctrl+Shift+V' |
-| 透明度 | number | 0.95 |
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| ExpandedPanel | `src/components/ExpandedPanel.vue` | 560×370px 容器，毛玻璃背景，分组列表 + 空状态 |
+| TopBar | `src/components/TopBar.vue` | 标签过滤 (ALL/STA/CLI)、Canvas 吉祥物、关闭按钮 |
+| AgentGroup | `src/components/AgentGroup.vue` | 按 agentType 分组（Claude→Codex→Gemini），空组隐藏 |
+| SessionCard | `src/components/SessionCard.vue` | 像素章鱼图标 + 项目信息 + 终端输出 + 状态徽章 |
+| TerminalOutput | `src/components/TerminalOutput.vue` | 按类型着色渲染（command/output/thinking/link/prompt）|
+| SettingsPanel | `src/components/SettingsPanel.vue` | 设置模态框（当前版本暂不渲染）|
 
 ## 3. Canvas 渲染引擎
 
