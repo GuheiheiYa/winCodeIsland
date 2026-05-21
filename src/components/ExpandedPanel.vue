@@ -18,7 +18,7 @@ const store = useNotchStore()
 function handleSessionClick(session: Session) {
   console.log('[ExpandedPanel] session clicked, pid=', session.pid, 'name=', session.projectName)
   if (session.pid) {
-    window.electronAPI.focusTerminal(session.pid)
+    window.electronAPI.focusTerminal(session.pid, session.projectName)
   } else {
     console.warn('[ExpandedPanel] session has no pid, cannot focus terminal:', session.projectName, session.id)
   }

@@ -250,20 +250,26 @@ interface AppState {
 | `settings:get/set` | R ↔ M | 获取/保存设置 |
 | `settings:changed` | M → R | 设置变更通知 |
 | `app:quit` | R → M | 退出应用 |
-| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口 |
+| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口，可选传入 `projectName` 用于 WT 标签切换 |
 
 **终端聚焦实现**:
 
 **渲染进程事件链**：
 - `SessionCard` 根元素监听 `@click`，`$emit('click', session)` 将事件向上传递
 - `AgentGroup` 透传 `@click` → `$emit('session-click', $event)` 至 `ExpandedPanel`
-- `ExpandedPanel.handleSessionClick(session)` 调用 `window.electronAPI.focusTerminal(session.pid)`
-- `preload.ts` 暴露 `focusTerminal: (pid) => ipcRenderer.send('terminal:focus', pid)`
+- `ExpandedPanel.handleSessionClick(session)` 调用 `window.electronAPI.focusTerminal(session.pid, session.projectName)`
+- `preload.ts` 暴露 `focusTerminal: (pid, projectName?) => ipcRenderer.send('terminal:focus', pid, projectName)`
 
-**主进程激活流程**（三层极速响应）：
+**主进程激活流程**（三层极速响应 + WT 标签异步切换）：
 1. **第一层——直接窗口匹配（~1-10ms）**：遍历所有顶层可见窗口（`GetDesktopWindow` → `GetWindow(GW_CHILD)` → `GetWindow(GW_HWNDNEXT)`），通过 `GetWindowThreadProcessId` 匹配目标 PID。找到后立即 `SetForegroundWindow` + `BringWindowToTop` 激活。
 2. **第二层——控制台窗口（~5-20ms）**：若目标进程没有独立可见窗口（如 WT 标签页中的子进程），通过 `AttachConsole(pid)` 附加到其控制台 + `GetConsoleWindow()` 获取句柄并激活。
 3. **第三层——父进程链兜底（~50-200ms）**：以上均失败时，异步执行轻量 `wmic process where "ProcessId=<pid>" get ParentProcessId,Name` 查询父进程链（最多 6 层），对遇到的每个祖先进程（直到 `WindowsTerminal.exe`、`cmd.exe`、`powershell.exe` 等）重复执行第一层和第二层窗口查找。
+
+4. **第四层——WT 标签精确切换（异步，~200-500ms）**：以上三层激活窗口后，若传入了 `projectName`，异步执行：
+   - 先调用 `list-wt-tabs.ps1` 获取所有 WT 标签 JSON 列表，按 `projectName` 模糊匹配 `TabName`
+   - 匹配成功则调用 `FocusWTClaudeByPID.ps1` 以 `Index` 精确定位标签
+   - 若 `getWTTabs` 失败或未匹配，回退到以 `TabNameKeyword` 直接让 PowerShell 脚本内部匹配
+   - 此层为异步执行，不阻塞前三层的即时响应；若匹配失败，窗口仍已激活
 
 - **无缓存**：每次点击实时解析，无 TTL 缓存，无后台预热。
 - **无延迟**：`ShowWindow(SW_RESTORE)` 后立即 `SetForegroundWindow`，没有 setTimeout 等待。

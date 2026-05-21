@@ -5,10 +5,16 @@
 ### 新增
 
 - **终端窗口聚焦** - 点击展开面板中的会话卡片，自动聚焦到对应的终端窗口
-  - `ExpandedPanel` 捕获 `session-click` 事件，调用 `window.electronAPI.focusTerminal(pid)`
+  - `ExpandedPanel` 捕获 `session-click` 事件，调用 `window.electronAPI.focusTerminal(pid, projectName)`
   - `ipcHandlers.ts` 新增 `terminal:focus` IPC 处理器，通过 PID 查找并激活终端窗口
-  - 纯 Win32 API 实现，无 PowerShell 脚本、无后台缓存、无延迟等待
+  - 纯 Win32 API 实现，无后台缓存、无延迟等待
   - 支持 Windows Terminal 和传统 CMD/PowerShell 窗口激活
+- **Windows Terminal 标签精确切换** - 在 Win32 API 兜底激活窗口基础上，异步触发 PowerShell + UIAutomation 切换 WT 内部标签页
+  - 新增 `electron/scripts/list-wt-tabs.ps1` 枚举所有 WT 标签并输出 JSON
+  - 新增 `electron/scripts/FocusWTClaudeByPID.ps1` 通过 `UIAutomationClient` 聚焦指定 WT 标签
+  - `terminal:focus` IPC 通道扩展签名：`(pid, projectName?)`，`ExpandedPanel` 点击时传入 `session.projectName`
+  - 两层架构：Win32 API 立即激活窗口（~1-200ms）→ PowerShell 异步切换标签（~200-500ms），兼顾响应速度与精确度
+  - 回退安全：若标签名匹配失败，窗口仍已激活，不阻断用户体验
 - **扩展终端类型支持** - `TerminalType` 新增 `cmd`、`powershell`、`wt`（Windows Terminal）
   - `ClaudeLogMonitor` 根据 `process.platform` 自动判断终端类型（Windows → `cmd`，其他 → `ghostty`）
 - **会话数据增强** - `Session` 接口新增 `pid?: number` 字段，用于终端窗口聚焦

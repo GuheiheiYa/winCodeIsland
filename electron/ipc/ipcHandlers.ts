@@ -1,5 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
+import fs from 'fs'
+import path from 'path'
 import type { AppSettings, DockPosition, Session } from '../../src/types'
 import { SessionManager } from '../services/sessionManager'
 
@@ -192,9 +194,66 @@ function focusTerminal(mainWindow: BrowserWindow, pid: number): void {
   })
 }
 
-/** Windows Terminal 标签切换（预留） */
-function focusWTTab(): void {
-  // TODO: 通过 UIAutomation 切换 WT 标签页
+// ============================================================================
+// Windows Terminal 标签切换 — UIAutomation（优先）
+// ============================================================================
+
+const FOCUS_DEBOUNCE_MS = 500
+let lastFocusTime = 0
+
+interface WtTab {
+  Index: number
+  InternalID: number
+  PID: number
+  TabName: string
+}
+
+/** 定位 PowerShell 脚本路径（支持开发模式和打包模式） */
+function resolveScriptPath(name: string): string {
+  const candidates = [
+    path.join(__dirname, '../scripts', name),
+    path.join(__dirname, '../../electron/scripts', name),
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p
+  }
+  return candidates[0]
+}
+
+/** 获取所有 Windows Terminal 标签列表 */
+function getWTTabs(): Promise<WtTab[]> {
+  const scriptPath = resolveScriptPath('list-wt-tabs.ps1')
+  return new Promise((resolve, reject) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      { windowsHide: true, timeout: 5000 },
+      (err, stdout) => {
+        if (err) return reject(err)
+        try {
+          const tabs: WtTab[] = JSON.parse(stdout)
+          resolve(tabs)
+        } catch (e) {
+          reject(e)
+        }
+      }
+    )
+  })
+}
+
+/** 通过 UIAutomation 聚焦 WT 标签 */
+function focusWTTab(args: { Index?: number; InternalID?: number; TabNameKeyword?: string }): void {
+  if (process.platform !== 'win32') return
+
+  const scriptPath = resolveScriptPath('FocusWTClaudeByPID.ps1')
+  const psArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
+  if (args.Index) psArgs.push('-TabNumber', args.Index.toString())
+  if (args.InternalID) psArgs.push('-InternalID', args.InternalID.toString())
+  if (args.TabNameKeyword) psArgs.push('-TabNameKeyword', args.TabNameKeyword)
+
+  execFile('powershell.exe', psArgs, { windowsHide: true, timeout: 5000 }, () => {
+    // 静默处理，聚焦失败不影响用户体验
+  })
 }
 
 // ============================================================================
@@ -264,8 +323,28 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // Sessions are auto-discovered from CLI state files.
   })
 
-  ipcMain.on('terminal:focus', (_event, pid: number) => {
+  ipcMain.on('terminal:focus', async (_event, pid: number, projectName?: string) => {
+    // 1. 始终先走 Win32 API 极速激活窗口（兜底）
     focusTerminal(mainWindow, pid)
+
+    // 2. 如有 projectName，异步尝试 UIAutomation 切换 WT 标签
+    if (!projectName || process.platform !== 'win32') return
+
+    const now = Date.now()
+    if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return
+    lastFocusTime = now
+
+    try {
+      const tabs = await getWTTabs()
+      const match = tabs.find(t => t.TabName.toLowerCase().includes(projectName.toLowerCase()))
+      if (match) {
+        focusWTTab({ Index: match.Index })
+      } else {
+        focusWTTab({ TabNameKeyword: projectName })
+      }
+    } catch {
+      focusWTTab({ TabNameKeyword: projectName })
+    }
   })
 }
 

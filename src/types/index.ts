@@ -108,7 +108,7 @@ export interface ElectronAPI {
   setSettings: (settings: AppSettings) => void
   onExpandChanged: (callback: (expanded: boolean) => void) => () => void
   setIgnoreMouseEvents: (ignore: boolean) => void
-  focusTerminal: (pid: number) => void
+  focusTerminal: (pid: number, projectName?: string) => void
   createSession: (projectName: string, cwd: string) => Promise<string>
   killSession: (id: string) => void
   platform: string
