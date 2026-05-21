@@ -67,6 +67,9 @@ export class ClaudeLogMonitor {
     if (state.kind !== 'interactive' || state.entrypoint !== 'cli') {
       return null
     }
+    if (!this.isProcessAlive(state.pid)) {
+      return null
+    }
 
     const projectName = this.extractProjectName(state.cwd)
     const { status, lastOutput } = this.analyzeSession(state)
@@ -414,6 +417,17 @@ export class ClaudeLogMonitor {
     if (!cwd) return 'Unknown'
     const parts = cwd.replace(/\\/g, '/').split('/')
     return parts[parts.length - 1] || parts[parts.length - 2] || 'Unknown'
+  }
+
+  private isProcessAlive(pid: number): boolean {
+    if (!Number.isInteger(pid) || pid <= 0) return false
+
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
   }
 }
 

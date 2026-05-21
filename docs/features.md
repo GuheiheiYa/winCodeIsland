@@ -261,11 +261,13 @@ interface AppState {
 - `preload.ts` 暴露 `focusTerminal: (pid) => ipcRenderer.send('terminal:focus', pid)`
 
 **主进程激活流程**：
-- `SessionManager` 每次扫描会话后调用 `primeTerminalFocusCache()`，后台预解析 `pid → { hwnd, tabIndex, termType }`，点击卡片时优先使用缓存（30 秒 TTL），避免把慢速进程树查询放在交互路径上。
-- Windows Terminal 通过目标 PID 的进程祖先链定位其所属的 `WindowsTerminal.exe` 窗口，再在该窗口的 `OpenConsole/conhost` 子进程中计算 tab 索引（仅保留父进程为 `WindowsTerminal` 的 `OpenConsole/conhost`，排除系统其他终端干扰）。
+- `SessionManager` 每次扫描会话后调用 `primeTerminalFocusCache()`，后台预解析 `pid → { hwnd, tabIndex, termType }`，点击卡片时优先使用缓存（5 分钟 TTL），避免把慢速进程树查询放在交互路径上。
+- Windows Terminal 通过目标 PID 的进程祖先链定位其所属的 `WindowsTerminal.exe` 窗口，再在该窗口的 `OpenConsole/conhost` 子进程中计算 tab 索引。由于 `Win32_Process` 返回的父进程数据不可靠（OpenConsole 的父进程常显示为 `svchost` 而非 `WindowsTerminal`），脚本是按启动时间邻近性匹配 WT 与 OpenConsole，并辅以进程树包含检测和单 WT 进程兜底。
 - 传统 CMD/PowerShell 先查找可见窗口句柄（`EnumWindows` + `GetWindowThreadProcessId`），必要时通过 `AttachConsole + GetConsoleWindow` 获取控制台窗口句柄。
-- **窗口恢复**：最小化窗口先 `ShowWindow(SW_RESTORE)`，等待 150ms 让 Windows 完成恢复动画后再执行 `SetForegroundWindow`，否则焦点请求会被系统忽略。
-- **WT 标签切换**：`SetForegroundWindow` 成功后延迟 400ms 执行 `wt -w 0 focus-tab --tab <index>`，确保 WT 窗口已完成焦点转移后再接收 tab 切换命令。
+- **窗口恢复**：最小化窗口先 `ShowWindow(SW_RESTORE)`，等待 120ms 让 Windows 完成恢复动画后再执行 `SetForegroundWindow`，否则焦点请求会被系统忽略。
+- **WT 标签切换**：`SetForegroundWindow` 成功后延迟 600ms，优先向当前前台 WT 窗口发送 `Ctrl+Alt+1..0`（匹配用户自定义的 Windows Terminal 快捷键绑定，第10个标签页用 `Ctrl+Alt+0`）；SendInput 后延迟 200ms 再断开 `AttachThreadInput`，避免键盘事件在 WT 处理前丢失；同时执行 `wt focus-tab --tab <index>` 作为可靠后备方案，双重保障确保标签页切换成功。
+- **默认终端宿主兼容**：当 `claude.exe -> cmd.exe -> explorer.exe` 而不是 `WindowsTerminal.exe` 子树时，按 shell 启动时间优先匹配对应 `OpenConsole.exe`，再用 OpenConsole 排序计算 WT tab 索引。
+- **PowerShell 结果回传**：解析脚本将 JSON 结果写入临时文件（`vibe-notch-focus-<timestamp>.json`），TypeScript 侧直接读取文件内容。此方案规避了 Electron `execFile` 捕获 PowerShell stdout 时因非零退出码导致 stdout 被清空的平台行为问题。
 - 使用 `AttachThreadInput` 附加当前线程到前景窗口输入队列，绕过 Windows 前台权限限制，激活目标后分离线程。
 - 激活完成后 800ms 恢复 Electron 窗口 `alwaysOnTop: 'screen-saver'` 置顶。
 

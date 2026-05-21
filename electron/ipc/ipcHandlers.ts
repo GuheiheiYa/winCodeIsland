@@ -25,9 +25,20 @@ const GetWindowThreadProcessId = user32.func('uint32 __stdcall GetWindowThreadPr
 const AttachThreadInput = user32.func('bool __stdcall AttachThreadInput(uint32 idAttach, uint32 idAttachTo, bool fAttach)')
 const GetCurrentThreadId = kernel32.func('uint32 __stdcall GetCurrentThreadId()')
 const BringWindowToTop = user32.func('bool __stdcall BringWindowToTop(void * hWnd)')
+const SendInput = user32.func('uint32 __stdcall SendInput(uint32 cInputs, _In_ void * pInputs, int32 cbSize)')
 
 const SW_RESTORE = 9
+const KEYEVENTF_KEYUP = 0x0002
+const VK_CONTROL = 0x11
+const VK_SHIFT = 0x10
+const VK_MENU = 0x12
+const VK_1 = 0x31
+const VK_0 = 0x30
 const CACHE_TTL = 5 * 60 * 1000
+
+// INPUT struct size on x64 Windows (type 4 + padding 4 + union 32 = 40)
+const INPUT_SIZE_X64 = 40
+const INPUT_KEYBOARD = 1
 const PRIME_INTERVAL = 5000
 
 interface FocusCacheEntry {
@@ -42,6 +53,7 @@ interface ResolvedTerminalTarget {
   hwnd: number
   tabIndex: number
   termType: 'wt' | 'cmd' | 'none'
+  wtPid: number
 }
 
 const focusCache = new Map<number, FocusCacheEntry>()
@@ -72,64 +84,162 @@ function setCachedFocus(result: ResolvedTerminalTarget): void {
   })
 }
 
+function sendWindowsTerminalTabShortcut(tabIndex: number): boolean {
+  if (tabIndex < 0 || tabIndex > 9) {
+    console.warn(`[terminal:focus] tabIndex out of range: ${tabIndex}`)
+    return false
+  }
+
+  const digitKey = tabIndex === 9 ? VK_0 : VK_1 + tabIndex
+  const digitChar = tabIndex === 9 ? '0' : String(tabIndex + 1)
+
+  // Log before sending
+  const beforeFg = GetForegroundWindow() as unknown
+  const beforeFgHwnd = beforeFg ? BigInt(Number(beforeFg as unknown)).toString() : 'null'
+  console.log(
+    `[terminal:focus] about to send keys via SendInput: Ctrl+Alt+${digitChar} (vk=0x${digitKey.toString(16)}) currentFg=${beforeFgHwnd}`
+  )
+
+  // Build 6 INPUT structures in one atomic call: Ctrl↓ Alt↓ Digit↓ Digit↑ Alt↑ Ctrl↑
+  // x64 INPUT layout: type(4) + padding(4) + ki.wVk(2) + ki.wScan(2) + ki.dwFlags(4) + ki.time(4) + padding(4) + ki.dwExtraInfo(8) = 40 bytes
+  const inputs = Buffer.alloc(INPUT_SIZE_X64 * 6)
+
+  const writeInput = (index: number, vk: number, flags: number): void => {
+    const off = index * INPUT_SIZE_X64
+    inputs.writeUInt32LE(INPUT_KEYBOARD, off) // type
+    inputs.writeUInt16LE(vk, off + 8) // ki.wVk
+    inputs.writeUInt16LE(0, off + 10) // ki.wScan
+    inputs.writeUInt32LE(flags, off + 12) // ki.dwFlags
+    inputs.writeUInt32LE(0, off + 16) // ki.time
+    inputs.writeBigUInt64LE(0n, off + 24) // ki.dwExtraInfo (at offset 24 within INPUT)
+  }
+
+  writeInput(0, VK_CONTROL, 0)
+  writeInput(1, VK_MENU, 0)
+  writeInput(2, digitKey, 0)
+  writeInput(3, digitKey, KEYEVENTF_KEYUP)
+  writeInput(4, VK_MENU, KEYEVENTF_KEYUP)
+  writeInput(5, VK_CONTROL, KEYEVENTF_KEYUP)
+
+  const sentCount = SendInput(6, inputs, INPUT_SIZE_X64) as unknown as number
+
+  const afterFg = GetForegroundWindow() as unknown
+  const afterFgHwnd = afterFg ? BigInt(Number(afterFg as unknown)).toString() : 'null'
+  console.log(`[terminal:focus] SendInput sent ${sentCount}/6 events, fg after=${afterFgHwnd}`)
+
+  return sentCount === 6
+}
+
+function focusWindowsTerminalTab(targetHwnd: bigint, tabIndex: number): void {
+  if (tabIndex < 0) {
+    console.warn(`[terminal:focus] skip tab switch: tabIndex=${tabIndex}`)
+    return
+  }
+
+  // Before sending shortcut, attach to target window's thread for input
+  const currentThreadId = GetCurrentThreadId() as unknown as number
+  const targetThreadId = Number(GetWindowThreadProcessId(targetHwnd as unknown, null))
+  const needAttach = targetThreadId > 0 && targetThreadId !== currentThreadId
+
+  if (needAttach) {
+    const attachResult = AttachThreadInput(currentThreadId, targetThreadId, true)
+    console.log(`[terminal:focus] AttachThreadInput(${currentThreadId}→${targetThreadId})=${attachResult}`)
+  }
+
+  const sentShortcut = sendWindowsTerminalTabShortcut(tabIndex)
+
+  // Delay before detach to give WT time to process the keyboard events
+  setTimeout(() => {
+    if (needAttach) {
+      AttachThreadInput(currentThreadId, targetThreadId, false)
+    }
+
+    if (sentShortcut) {
+      console.log(`[terminal:focus] completed Ctrl+Alt+${tabIndex === 9 ? 0 : tabIndex + 1}`)
+    }
+
+    // Always run wt command as reliable fallback / double-check
+    // WT will operate on the currently focused window
+    console.log(`[terminal:focus] running wt focus-tab --tab ${tabIndex}`)
+    execFile('wt', ['focus-tab', '--tab', String(tabIndex)], { windowsHide: true }, (err) => {
+      if (err) {
+        console.warn('[terminal:focus] wt focus-tab failed:', err.message)
+      } else {
+        console.log('[terminal:focus] wt focus-tab command executed')
+      }
+    })
+  }, 200)
+}
+
 function activateTerminal(
   mainWindow: BrowserWindow,
   hwnd: bigint,
   tabIndex: number,
   termType: string
 ): void {
+  console.log(`[terminal:focus] activateTerminal called: hwnd=${hwnd.toString()} tab=${tabIndex} type=${termType}`)
+
   if (!IsWindow(hwnd as unknown)) {
     console.warn('[terminal:focus] cached hwnd is no longer valid:', hwnd.toString())
     return
   }
 
-  mainWindow.setAlwaysOnTop(false)
-  mainWindow.blur()
-
   const bringToFront = (): void => {
-    if (IsIconic(hwnd as unknown)) {
+    const wasIconic = IsIconic(hwnd as unknown)
+    console.log(`[terminal:focus] bringToFront start: wasIconic=${wasIconic}`)
+
+    if (wasIconic) {
       ShowWindow(hwnd as unknown, SW_RESTORE)
     }
 
     const currentThreadId = GetCurrentThreadId() as unknown as number
     const foregroundHwnd = GetForegroundWindow() as unknown
+    const foregroundHwndNum = foregroundHwnd ? Number(foregroundHwnd as unknown) : 0
     const foregroundThreadId = foregroundHwnd
       ? Number(GetWindowThreadProcessId(foregroundHwnd, null))
       : currentThreadId
 
+    console.log(`[terminal:focus] before SetForegroundWindow: currentThread=${currentThreadId} fgHwnd=${foregroundHwndNum} fgThread=${foregroundThreadId}`)
+
     if (foregroundThreadId !== currentThreadId) {
-      AttachThreadInput(currentThreadId, foregroundThreadId, true)
+      const attachBefore = AttachThreadInput(currentThreadId, foregroundThreadId, true)
+      console.log(`[terminal:focus] AttachThreadInput before=${attachBefore}`)
     }
 
     const foregroundResult = SetForegroundWindow(hwnd as unknown)
-    BringWindowToTop(hwnd as unknown)
+    const bringResult = BringWindowToTop(hwnd as unknown)
 
     if (foregroundThreadId !== currentThreadId) {
-      AttachThreadInput(currentThreadId, foregroundThreadId, false)
+      const attachAfter = AttachThreadInput(currentThreadId, foregroundThreadId, false)
+      console.log(`[terminal:focus] AttachThreadInput after=${attachAfter}`)
     }
 
-    console.log(`[terminal:focus] foreground=${foregroundResult} hwnd=${hwnd.toString()}`)
+    console.log(`[terminal:focus] SetForegroundWindow=${foregroundResult} BringWindowToTop=${bringResult}`)
 
     if (termType === 'wt' && tabIndex >= 0) {
+      // Longer delay: WT needs time to fully activate, especially after restore
       setTimeout(() => {
-        execFile('wt', ['-w', '0', 'focus-tab', '--target', String(tabIndex)], { windowsHide: true }, (err) => {
-          if (err) {
-            console.warn('[terminal:focus] wt focus-tab failed:', err.message)
-          }
-        })
-      }, 120)
-    }
+        // Double-check foreground window is still WT before sending shortcut
+        const fgNow = GetForegroundWindow() as unknown
+        const fgHwnd = fgNow ? BigInt(Number(fgNow as unknown)) : BigInt(0)
+        const fgPidArr = new Uint32Array(1)
+        if (fgNow) {
+          GetWindowThreadProcessId(fgNow as unknown, fgPidArr)
+        }
+        console.log(`[terminal:focus] before shortcut: expected=${hwnd.toString()} actual=${fgHwnd.toString()} actualPid=${fgPidArr[0]}`)
 
-    setTimeout(() => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnTop(true, 'screen-saver')
-      }
-    }, 800)
+        if (fgHwnd !== hwnd) {
+          console.warn(`[terminal:focus] foreground mismatch! expected=${hwnd.toString()} actual=${fgHwnd.toString()}`)
+        }
+
+        focusWindowsTerminalTab(hwnd, tabIndex)
+      }, 600)
+    }
   }
 
   if (IsIconic(hwnd as unknown)) {
     ShowWindow(hwnd as unknown, SW_RESTORE)
-    setTimeout(bringToFront, 120)
+    setTimeout(bringToFront, 150)
   } else {
     bringToFront()
   }
@@ -145,7 +255,7 @@ function resolveTerminalTargets(pids: number[]): Promise<ResolvedTerminalTarget[
   }
 
   const psScript = `
-param([string]$TargetPidList)
+param([string]$TargetPidList, [string]$ResultPath)
 $targetPids = @($TargetPidList -split ',' | Where-Object { $_ } | ForEach-Object { [int]$_ })
 $results = @()
 
@@ -191,8 +301,7 @@ public class VibeWin32 {
 $processMap = @{}
 $childrenMap = @{}
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
-  $name = [string]$_.Name
-  if ($name.EndsWith(".exe")) { $name = $name.Substring(0, $name.Length - 4) }
+  $name = [System.IO.Path]::GetFileNameWithoutExtension([string]$_.Name)
   $processId = [int]$_.ProcessId
   $parent = [int]$_.ParentProcessId
   $info = [pscustomobject]@{ Pid = $processId; Parent = $parent; Name = $name }
@@ -206,6 +315,12 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
 $getProcessMap = @{}
 Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
   $getProcessMap[[int]$_.Id] = $_
+}
+
+# Pre-fetch OpenConsole list once at script level to avoid PowerShell pipeline quirks
+$script:allOpenConsoles = @(Get-Process -Name OpenConsole -ErrorAction SilentlyContinue | Where-Object { $_.StartTime } | Sort-Object StartTime)
+if ($script:allOpenConsoles.Count -eq 0) {
+  $script:allOpenConsoles = @(Get-Process -Name conhost -ErrorAction SilentlyContinue | Where-Object { $_.StartTime } | Sort-Object StartTime)
 }
 
 function Get-Ancestors([int]$TargetProcessId) {
@@ -240,35 +355,217 @@ function Test-TreeContains([int]$RootPid, [int]$TargetPid) {
   return $false
 }
 
+function Test-IsWindowsTerminalProcess($Proc) {
+  $procName = if ($Proc.Name) { $Proc.Name } else { $Proc.ProcessName }
+  return $Proc -and ($procName -eq "WindowsTerminal" -or $procName -eq "WindowsTerminalPreview")
+}
+
+function Get-WindowsTerminalRoot($Ancestors, $ConsoleRoot) {
+  $wtAncestor = $Ancestors | Where-Object { Test-IsWindowsTerminalProcess $_ } | Select-Object -First 1
+  if ($wtAncestor) { return $wtAncestor }
+
+  if ($ConsoleRoot -and $processMap.ContainsKey($ConsoleRoot.Parent)) {
+    $parentProc = $processMap[$ConsoleRoot.Parent]
+    if (Test-IsWindowsTerminalProcess $parentProc) { return $parentProc }
+  }
+
+  foreach ($candidate in $processMap.Values) {
+    if ((Test-IsWindowsTerminalProcess $candidate) -and $ConsoleRoot -and (Test-TreeContains $candidate.Pid $ConsoleRoot.Pid)) {
+      return $candidate
+    }
+  }
+
+  # Fallback: match WT by start time proximity to OpenConsole
+  if ($ConsoleRoot -and $getProcessMap.ContainsKey($ConsoleRoot.Pid)) {
+    $consoleStart = $getProcessMap[$ConsoleRoot.Pid].StartTime
+    $wtCandidates = @($getProcessMap.Values | Where-Object { Test-IsWindowsTerminalProcess $_ -and $_.StartTime })
+    $best = $null
+    $bestDiff = [double]::MaxValue
+    foreach ($wt in $wtCandidates) {
+      $diff = [Math]::Abs(($wt.StartTime - $consoleStart).TotalSeconds)
+      if ($diff -lt $bestDiff) {
+        $best = $wt
+        $bestDiff = $diff
+      }
+    }
+    if ($best -and $bestDiff -le 300) {
+      return $processMap[[int]$best.Id]
+    }
+  }
+
+  # Last resort: if there's exactly one WT process on the system, use it
+  $allWt = @($getProcessMap.Values | Where-Object { Test-IsWindowsTerminalProcess $_ })
+  if ($allWt.Count -eq 1) {
+    return $processMap[[int]$allWt[0].Id]
+  }
+
+  return $null
+}
+
+function Get-ShellAncestor($Ancestors) {
+  return $Ancestors | Where-Object { $_.Name -eq "cmd" -or $_.Name -eq "powershell" -or $_.Name -eq "pwsh" } | Select-Object -First 1
+}
+
+function Get-MatchingConsoleRoot($ShellProc) {
+  if (-not $ShellProc -or -not $getProcessMap.ContainsKey($ShellProc.Pid)) { return $null }
+
+  $shellStart = $getProcessMap[$ShellProc.Pid].StartTime
+  $rootCandidates = @($getProcessMap.Values | Where-Object { $_.ProcessName -eq "OpenConsole" -and $_.StartTime })
+  if ($rootCandidates.Count -eq 0) {
+    $rootCandidates = @($getProcessMap.Values | Where-Object { $_.ProcessName -eq "conhost" -and $_.StartTime })
+  }
+
+  $best = $null
+  $bestDiff = [double]::MaxValue
+
+  foreach ($candidate in $rootCandidates) {
+    $diff = [Math]::Abs(($candidate.StartTime - $shellStart).TotalSeconds)
+    if ($diff -lt $bestDiff) {
+      $best = $candidate
+      $bestDiff = $diff
+    }
+  }
+
+  if ($best -and $bestDiff -le 3) {
+    return $processMap[[int]$best.Id]
+  }
+
+  return $null
+}
+
+function Get-AllConsoleRoots() {
+  $roots = @($getProcessMap.Values |
+    Where-Object { $_.ProcessName -eq "OpenConsole" -and $_.StartTime } |
+    Sort-Object StartTime)
+
+  if ($roots.Count -gt 0) { return $roots }
+
+  return @($getProcessMap.Values |
+    Where-Object { $_.ProcessName -eq "conhost" -and $_.StartTime } |
+    Sort-Object StartTime)
+}
+
+# ---------- Phase 1: collect info for all target PIDs ----------
+$targetInfos = @()
 foreach ($targetPid in $targetPids) {
+  try {
+    $ancestors = @(Get-Ancestors $targetPid)
+    $shellAncestor = Get-ShellAncestor $ancestors
+    $consoleRoot = $ancestors | Where-Object { $_.Name -eq "OpenConsole" -or $_.Name -eq "conhost" } | Select-Object -First 1
+    $consoleSource = "ancestors"
+    if (-not $consoleRoot) {
+      $consoleRoot = Get-MatchingConsoleRoot $shellAncestor
+      $consoleSource = "matching"
+    }
+    $wtRoot = Get-WindowsTerminalRoot $ancestors $consoleRoot
+
+    $targetInfos += [pscustomobject]@{
+      TargetPid = $targetPid
+      Ancestors = $ancestors
+      ShellAncestor = $shellAncestor
+      ConsoleRoot = $consoleRoot
+      ConsoleSource = $consoleSource
+      WtRoot = $wtRoot
+    }
+  } catch {
+    [Console]::Error.WriteLine("ERROR phase1 pid=$targetPid : $($_.Exception.Message)")
+    $targetInfos += [pscustomobject]@{
+      TargetPid = $targetPid
+      Ancestors = @()
+      ShellAncestor = $null
+      ConsoleRoot = $null
+      ConsoleSource = "error"
+      WtRoot = $null
+    }
+  }
+}
+
+# ---------- Phase 2: build per-WT-window tabIndex maps ----------
+# Only consider OpenConsoles that belong to target PIDs in the same WT window.
+# This avoids mixing in OpenConsoles from other WT windows or other terminal apps.
+$wtTabIndexMap = @{}
+foreach ($info in $targetInfos) {
+  if (-not $info.WtRoot -or -not $info.ConsoleRoot) { continue }
+  $wtPid = [int]$info.WtRoot.Pid
+  if (-not $wtTabIndexMap.ContainsKey($wtPid)) {
+    $wtTabIndexMap[$wtPid] = @{}
+  }
+}
+
+$wtPidList = @($wtTabIndexMap.Keys)
+foreach ($wtPid in $wtPidList) {
+  $ocPidList = [System.Collections.Generic.List[int]]::new()
+  foreach ($info in $targetInfos) {
+    if ($info.WtRoot -and [int]$info.WtRoot.Pid -eq $wtPid -and $info.ConsoleRoot) {
+      $ocPidList.Add([int]$info.ConsoleRoot.Pid)
+    }
+  }
+
+  $uniqueOcPids = @($ocPidList | Sort-Object -Unique)
+  $ocProcs = @()
+  foreach ($ocPid in $uniqueOcPids) {
+    if ($getProcessMap.ContainsKey($ocPid)) {
+      $ocProcs += $getProcessMap[$ocPid]
+    }
+  }
+  $ocProcs = @($ocProcs | Where-Object { $_.StartTime } | Sort-Object StartTime)
+
+  $tabMap = @{}
+  for ($i = 0; $i -lt $ocProcs.Count; $i++) {
+    $tabMap[[int]$ocProcs[$i].Id] = $i
+  }
+  $wtTabIndexMap[$wtPid] = $tabMap
+
+  $ocIdList = ($ocProcs | ForEach-Object { $_.Id }) -join ','
+  [Console]::Error.WriteLine("WT=$wtPid windowConsoles=$($ocProcs.Count) ids=$ocIdList")
+}
+
+# ---------- Phase 3: generate final results ----------
+foreach ($info in $targetInfos) {
+  $targetPid = $info.TargetPid
   $hwnd = 0
   $tabIndex = -1
   $termType = "none"
-  $ancestors = @(Get-Ancestors $targetPid)
-  $wtAncestor = $ancestors | Where-Object { $_.Name -eq "WindowsTerminal" -or $_.Name -eq "WindowsTerminalPreview" } | Select-Object -First 1
+  $wtPidValue = 0
 
-  if ($wtAncestor -and $getProcessMap.ContainsKey($wtAncestor.Pid)) {
-    $wtProc = $getProcessMap[$wtAncestor.Pid]
-    if ($wtProc.MainWindowHandle) { $hwnd = $wtProc.MainWindowHandle.ToInt64() }
+  if ($info.WtRoot) {
     $termType = "wt"
+    $wtPidValue = [int]$info.WtRoot.Pid
 
-    $consoleRoots = @()
-    if ($childrenMap.ContainsKey($wtAncestor.Pid)) {
-      foreach ($childPid in $childrenMap[$wtAncestor.Pid]) {
-        if (-not $processMap.ContainsKey($childPid) -or -not $getProcessMap.ContainsKey($childPid)) { continue }
-        $child = $processMap[$childPid]
-        if ($child.Name -eq "OpenConsole" -or $child.Name -eq "conhost") {
-          $consoleRoots += $getProcessMap[$childPid]
+    # Get WT window handle: prefer MainWindowHandle, fallback to EnumWindows
+    foreach ($proc in $getProcessMap.Values) {
+      if ((Test-IsWindowsTerminalProcess $proc) -and $proc.MainWindowHandle -and $proc.MainWindowHandle -ne [IntPtr]::Zero) {
+        $hwnd = $proc.MainWindowHandle.ToInt64()
+        break
+      }
+    }
+    if ($hwnd -eq 0) {
+      foreach ($proc in $getProcessMap.Values) {
+        if (Test-IsWindowsTerminalProcess $proc) {
+          $fallbackHwnd = [VibeWin32]::FindVisibleHwndByPid($proc.Id)
+          if ($fallbackHwnd -ne [IntPtr]::Zero) {
+            $hwnd = $fallbackHwnd.ToInt64()
+            break
+          }
         }
       }
     }
 
-    $consoleRoots = @($consoleRoots | Sort-Object StartTime)
-    for ($i = 0; $i -lt $consoleRoots.Count; $i++) {
-      if (Test-TreeContains ([int]$consoleRoots[$i].Id) $targetPid) {
-        $tabIndex = $i
-        break
+    # Look up relative tabIndex from the per-window map
+    if ($wtTabIndexMap.ContainsKey($wtPidValue) -and $info.ConsoleRoot) {
+      $tabMap = $wtTabIndexMap[$wtPidValue]
+      $ocPid = [int]$info.ConsoleRoot.Pid
+      if ($tabMap.ContainsKey($ocPid)) {
+        $tabIndex = $tabMap[$ocPid]
       }
+    }
+
+    [Console]::Error.WriteLine("pid=$targetPid tab=$tabIndex target=$($info.ConsoleRoot.Pid) source=$($info.ConsoleSource)")
+  } elseif ($info.ConsoleRoot -and $info.ShellAncestor) {
+    $consoleHwnd = [VibeWin32]::GetConsoleHwnd($info.ShellAncestor.Pid)
+    if ($consoleHwnd -ne [IntPtr]::Zero) {
+      $hwnd = $consoleHwnd.ToInt64()
+      $termType = "cmd"
     }
   } else {
     $visible = [VibeWin32]::FindVisibleHwndByPid($targetPid)
@@ -277,7 +574,7 @@ foreach ($targetPid in $targetPids) {
       $termType = "cmd"
     } else {
       $consolePid = 0
-      foreach ($ancestor in $ancestors) {
+      foreach ($ancestor in $info.Ancestors) {
         if ($ancestor.Name -eq "cmd" -or $ancestor.Name -eq "powershell" -or $ancestor.Name -eq "pwsh" -or $ancestor.Name -eq "conhost") {
           $candidate = [VibeWin32]::FindVisibleHwndByPid($ancestor.Pid)
           if ($candidate -ne [IntPtr]::Zero) {
@@ -288,7 +585,6 @@ foreach ($targetPid in $targetPids) {
           if ($consolePid -eq 0) { $consolePid = $ancestor.Pid }
         }
       }
-
       if ($hwnd -eq 0 -and $consolePid -gt 0) {
         $consoleHwnd = [VibeWin32]::GetConsoleHwnd($consolePid)
         if ($consoleHwnd -ne [IntPtr]::Zero) {
@@ -304,13 +600,21 @@ foreach ($targetPid in $targetPids) {
     hwnd = [long]$hwnd
     tabIndex = [int]$tabIndex
     termType = $termType
+    wtPid = [int]$wtPidValue
   }
 }
 
-@($results) | ConvertTo-Json -Compress
+$jsonOutput = ConvertTo-Json -InputObject @($results) -Compress
+if ($ResultPath) {
+  [System.IO.File]::WriteAllText($ResultPath, $jsonOutput, [System.Text.Encoding]::UTF8)
+} else {
+  Write-Output $jsonOutput
+}
+exit 0
 `
 
   const scriptPath = path.join(os.tmpdir(), 'vibe-notch-focus-resolver.ps1')
+  const resultPath = path.join(os.tmpdir(), `vibe-notch-focus-${Date.now()}.json`)
   fs.writeFileSync(scriptPath, psScript, 'utf8')
 
   return new Promise((resolve) => {
@@ -323,28 +627,48 @@ foreach ($targetPid in $targetPids) {
         'Bypass',
         '-File',
         scriptPath,
-        pidsToResolve.join(',')
+        pidsToResolve.join(','),
+        resultPath
       ],
       { windowsHide: true, timeout: 8000 },
-      (err, stdout, stderr) => {
+      (err, _stdout, stderr) => {
         for (const pid of pidsToResolve) resolvingPids.delete(pid)
 
-        if (stderr) {
+        if (stderr && stderr.trim()) {
           console.warn('[terminal:focus] resolver stderr:', stderr.trim())
         }
-        if (err) {
-          console.warn('[terminal:focus] resolver failed:', err.message)
+
+        let jsonText = ''
+        try {
+          if (fs.existsSync(resultPath)) {
+            jsonText = fs.readFileSync(resultPath, 'utf8').trim()
+            fs.unlinkSync(resultPath)
+          }
+        } catch (fsErr) {
+          console.warn('[terminal:focus] failed to read result file:', (fsErr as Error).message)
+        }
+
+        if (!jsonText) {
+          if (err) {
+            console.warn('[terminal:focus] resolver failed and no result file:', err.message)
+          } else {
+            console.warn('[terminal:focus] resolver produced no result file')
+          }
           resolve([])
           return
         }
 
         try {
-          const parsed = JSON.parse(stdout.trim() || '[]') as ResolvedTerminalTarget[] | ResolvedTerminalTarget
-          const results = Array.isArray(parsed) ? parsed : [parsed]
-          for (const result of results) setCachedFocus(result)
+          const parsed = JSON.parse(jsonText) as ResolvedTerminalTarget[] | ResolvedTerminalTarget
+          let results = Array.isArray(parsed) ? parsed : [parsed]
+
+          for (const result of results) {
+            console.log(`[terminal:focus] resolved pid=${result.pid} hwnd=${result.hwnd} type=${result.termType} tab=${result.tabIndex} wtPid=${result.wtPid}`)
+            setCachedFocus(result)
+          }
           resolve(results)
         } catch (parseErr) {
-          console.warn('[terminal:focus] resolver returned invalid JSON:', stdout.trim(), parseErr)
+          console.warn('[terminal:focus] resolver returned invalid JSON:', jsonText, parseErr)
           resolve([])
         }
       }

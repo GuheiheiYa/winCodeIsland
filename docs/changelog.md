@@ -20,6 +20,9 @@
 - **修复 `ipcHandlers.ts` TypeScript 报错** - 将 `require('child_process')`、`require('fs')`、`require('path')`、`require('os')` 改为 ESModule `import` 语法，兼容 `tsconfig.node.json` 的 `module: "ESNext"` 配置
 - **修复终端聚焦延迟与多窗口误定位** - 终端目标解析从点击时同步探测改为后台缓存，并按目标 PID 的 Windows Terminal 祖先窗口计算 tab 索引，不再默认使用第一个 Windows Terminal 窗口
 - **修复 PowerShell resolver 变量冲突** - 避免使用 `$pid` / `$Pid` 这类会撞上 PowerShell 内置只读 `$PID` 的变量名
+- **修复 Windows Terminal tab 未切换** - 激活目标 WT 窗口后优先发送 `Ctrl+Alt+1..9` 到当前前台窗口，避免外部 `wt -w 0 focus-tab` 命令落到错误窗口
+- **增强 Windows Terminal 识别** - 当 `WindowsTerminal.exe` 不在目标 PID 直接祖先链时，改为先定位所属 `OpenConsole/conhost`，再反查包含该控制台宿主的 WT 窗口
+- **兼容 Windows Terminal 默认终端模式** - 对 `claude.exe -> cmd.exe -> explorer.exe` 的进程链，按 shell 启动时间匹配 `OpenConsole.exe` 并计算 tab 索引
 - **修复 sleeping 输出解析中的重复 `case`** - `assistant/message` 的嵌套 `tool_use` 检查合并到同一个分支，消除永远不可达的重复 case
 - **修复主进程类型检查问题** - 补全 Claude `waiting` 状态类型，修正托盘图标类型，并将 `visibleOnAllWorkspaces` 从构造参数改为窗口创建后的 API 调用
 - **修复 `tsconfig` 项目引用冲突** - 移除 `tsconfig.json` → `tsconfig.node.json` 的 `references`，解除 `src/types/index.ts` 被两个项目同时包含导致的类型检查冲突
@@ -29,7 +32,14 @@
 - **修复最小化窗口无法弹出** - `ShowWindow(SW_RESTORE)` 后增加 150ms 延迟，等待 Windows 完成窗口恢复动画后再执行 `SetForegroundWindow`
 - **修复 WT 标签页切换定位失败** - `wt` 命令增加 `-w 0` 窗口目标参数（指定当前 WT 窗口而非新建），并将 `focus-tab` 执行延迟 400ms（等待窗口完成焦点转移）
 - **修复 WT 标签索引计算错误** - PowerShell 中 `$activeOcs` 过滤条件从"有子进程"改为"父进程是 WindowsTerminal"，排除系统其他终端的 conhost 干扰
-- **优化终端聚焦速度** - 新增 30 秒 TTL 缓存（`Map<pid → {hwnd, tabIndex, termType}``），同一会话二次点击跳过 PowerShell 冷启动；清理 PowerShell 脚本中 10+ 处调试输出减少 I/O 开销
+- **修复 WT 标签切换快捷键错误** - `sendWindowsTerminalTabShortcut` 发送 `Ctrl+Alt+数字`，匹配用户自定义的 Windows Terminal 快捷键绑定
+- **修复 WT 第10个标签页无法切换** - `sendWindowsTerminalTabShortcut` 支持 tabIndex=9（`Ctrl+Alt+0`）
+- **修复 wt 命令回退参数** - `wt focus-tab` 的参数从 `--target` 修正为 `--tab`
+- **修复 SendInput 后立即 detach 导致 WT 无法接收快捷键** - `focusWindowsTerminalTab` 中 SendInput 发送后延迟 200ms 再断开 `AttachThreadInput`，给 Windows Terminal 足够时间处理键盘事件
+- **增强 WT 标签切换可靠性** - 同时执行 `wt focus-tab --tab <index>` 作为 SendInput 的可靠后备方案，确保标签页一定能切换
+- **修复 PowerShell stdout 捕获失败导致解析结果丢失** - Electron `execFile` 无法可靠捕获 `ConvertTo-Json` 的 stdout 输出（PowerShell 非零退出码时 stdout 被清空），改为脚本将 JSON 结果写入临时文件，TypeScript 侧直接读取文件，彻底绕过 stdout/stderr 缓冲问题
+- **修复 PowerShell 异常退出码** - `Get-Process -Name OpenConsole -ErrorAction SilentlyContinue` 在未匹配到进程时设置 `$?=$false`，导致脚本即使成功也返回退出码 1；末尾显式添加 `exit 0` 确保干净退出
+- **优化终端聚焦速度** - 新增 5 分钟 TTL 缓存（`Map<pid → {hwnd, tabIndex, termType}`），同一会话二次点击跳过 PowerShell 冷启动；清理 PowerShell 脚本中 10+ 处调试输出减少 I/O 开销
 
 ## [v1.0.5] - 2026-05-19
 
