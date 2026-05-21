@@ -5,7 +5,7 @@
   "main": "./out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node -e \"require('fs').cpSync('electron/scripts', 'out/main/scripts', {recursive:true})\"",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit"
   },

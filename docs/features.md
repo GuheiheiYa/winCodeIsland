@@ -250,26 +250,24 @@ interface AppState {
 | `settings:get/set` | R ↔ M | 获取/保存设置 |
 | `settings:changed` | M → R | 设置变更通知 |
 | `app:quit` | R → M | 退出应用 |
-| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口（后台缓存 + Win32 API + Windows Terminal tab 切换）|
+| `terminal:focus` | R → M | 通过 PID 聚焦对应终端窗口 |
 
 **终端聚焦实现**:
 
 **渲染进程事件链**：
 - `SessionCard` 根元素监听 `@click`，`$emit('click', session)` 将事件向上传递
 - `AgentGroup` 透传 `@click` → `$emit('session-click', $event)` 至 `ExpandedPanel`
-- `ExpandedPanel.handleSessionClick(session)` 调用 `window.electronAPI.focusTerminal(pid)`
+- `ExpandedPanel.handleSessionClick(session)` 调用 `window.electronAPI.focusTerminal(session.pid)`
 - `preload.ts` 暴露 `focusTerminal: (pid) => ipcRenderer.send('terminal:focus', pid)`
 
-**主进程激活流程**：
-- `SessionManager` 每次扫描会话后调用 `primeTerminalFocusCache()`，后台预解析 `pid → { hwnd, tabIndex, termType }`，点击卡片时优先使用缓存（5 分钟 TTL），避免把慢速进程树查询放在交互路径上。
-- Windows Terminal 通过目标 PID 的进程祖先链定位其所属的 `WindowsTerminal.exe` 窗口，再在该窗口的 `OpenConsole/conhost` 子进程中计算 tab 索引。由于 `Win32_Process` 返回的父进程数据不可靠（OpenConsole 的父进程常显示为 `svchost` 而非 `WindowsTerminal`），脚本是按启动时间邻近性匹配 WT 与 OpenConsole，并辅以进程树包含检测和单 WT 进程兜底。
-- 传统 CMD/PowerShell 先查找可见窗口句柄（`EnumWindows` + `GetWindowThreadProcessId`），必要时通过 `AttachConsole + GetConsoleWindow` 获取控制台窗口句柄。
-- **窗口恢复**：最小化窗口先 `ShowWindow(SW_RESTORE)`，等待 120ms 让 Windows 完成恢复动画后再执行 `SetForegroundWindow`，否则焦点请求会被系统忽略。
-- **WT 标签切换**：`SetForegroundWindow` 成功后延迟 600ms，优先向当前前台 WT 窗口发送 `Ctrl+Alt+1..0`（匹配用户自定义的 Windows Terminal 快捷键绑定，第10个标签页用 `Ctrl+Alt+0`）；SendInput 后延迟 200ms 再断开 `AttachThreadInput`，避免键盘事件在 WT 处理前丢失；同时执行 `wt focus-tab --tab <index>` 作为可靠后备方案，双重保障确保标签页切换成功。
-- **默认终端宿主兼容**：当 `claude.exe -> cmd.exe -> explorer.exe` 而不是 `WindowsTerminal.exe` 子树时，按 shell 启动时间优先匹配对应 `OpenConsole.exe`，再用 OpenConsole 排序计算 WT tab 索引。
-- **PowerShell 结果回传**：解析脚本将 JSON 结果写入临时文件（`vibe-notch-focus-<timestamp>.json`），TypeScript 侧直接读取文件内容。此方案规避了 Electron `execFile` 捕获 PowerShell stdout 时因非零退出码导致 stdout 被清空的平台行为问题。
-- 使用 `AttachThreadInput` 附加当前线程到前景窗口输入队列，绕过 Windows 前台权限限制，激活目标后分离线程。
-- 激活完成后 800ms 恢复 Electron 窗口 `alwaysOnTop: 'screen-saver'` 置顶。
+**主进程激活流程**（三层极速响应）：
+1. **第一层——直接窗口匹配（~1-10ms）**：遍历所有顶层可见窗口（`GetDesktopWindow` → `GetWindow(GW_CHILD)` → `GetWindow(GW_HWNDNEXT)`），通过 `GetWindowThreadProcessId` 匹配目标 PID。找到后立即 `SetForegroundWindow` + `BringWindowToTop` 激活。
+2. **第二层——控制台窗口（~5-20ms）**：若目标进程没有独立可见窗口（如 WT 标签页中的子进程），通过 `AttachConsole(pid)` 附加到其控制台 + `GetConsoleWindow()` 获取句柄并激活。
+3. **第三层——父进程链兜底（~50-200ms）**：以上均失败时，异步执行轻量 `wmic process where "ProcessId=<pid>" get ParentProcessId,Name` 查询父进程链（最多 6 层），对遇到的每个祖先进程（直到 `WindowsTerminal.exe`、`cmd.exe`、`powershell.exe` 等）重复执行第一层和第二层窗口查找。
+
+- **无缓存**：每次点击实时解析，无 TTL 缓存，无后台预热。
+- **无延迟**：`ShowWindow(SW_RESTORE)` 后立即 `SetForegroundWindow`，没有 setTimeout 等待。
+- **前台权限**：使用 `AttachThreadInput` 附加当前线程到前景窗口输入队列，绕过 Windows 前台权限限制，激活后立即分离。
 
 ## 7. 窗口系统
 
